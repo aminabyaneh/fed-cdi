@@ -16,8 +16,9 @@ from causal_discovery.optimizers import AdamTheta, AdamGamma
 
 class ENCO(object):
 
-    def __init__(self, 
+    def __init__(self,
                  graph,
+                 prior_info=None,
                  hidden_dims=[64],
                  lr_model=5e-3,
                  betas_model=(0.9, 0.999),
@@ -44,6 +45,8 @@ class ENCO(object):
         ----------
         graph : CausalDAG
                 The causal graph on which we want to perform causal structure learning.
+        prior_info : torch.nn.Parameter
+                The prior gamma matrix for the federated setup.
         hidden_dims : list[int]
                       Hidden dimensionalities to use in the distribution fitting neural networks.
                       Listing more than one dimensionality creates multiple hidden layers.
@@ -67,10 +70,10 @@ class ENCO(object):
                      Batch size to use in both distribution and graph fitting stage.
         GF_num_batches : int
                          Number of batches to use per MC sample in the graph fitting stage.
-                         Usually 1, only higher needed if GPU is running out of memory for 
+                         Usually 1, only higher needed if GPU is running out of memory for
                          common batch sizes.
-        GF_num_graphs : int 
-                        Number of graph samples to use for estimating the gradients in the 
+        GF_num_graphs : int
+                        Number of graph samples to use for estimating the gradients in the
                         graph fitting stage. Usually in the range 20-100.
         lambda_sparse : float
                         Sparsity regularizer value to use in the graph fitting stage.
@@ -91,11 +94,11 @@ class ENCO(object):
         theta_only_iters : int
                            Number of update steps to perform in each graph fitting stage if
                            gamma is frozen. Can be much higher than graph_iters since less
-                           graph samples are needed per update step. 
+                           graph samples are needed per update step.
         max_graph_stacking : int
                              Number of graphs that can maximally evaluated in parallel on the device
-                             during the graph fitting stage. If you run out of GPU memory, try to 
-                             lower this number. The graphs will then be evaluated in sequence, which 
+                             during the graph fitting stage. If you run out of GPU memory, try to
+                             lower this number. The graphs will then be evaluated in sequence, which
                              can be slightly slower but uses less memory.
         """
         self.graph = graph
@@ -112,7 +115,7 @@ class ENCO(object):
         print("Distribution fitting model:\n" + str(model))
         model_optimizer = torch.optim.Adam(model.parameters(), lr=lr_model, betas=betas_model)
         # Initialize graph parameters
-        self.init_graph_params(self.num_vars, lr_gamma, betas_gamma, lr_theta, betas_theta)
+        self.init_graph_params(self.num_vars, lr_gamma, betas_gamma, lr_theta, betas_theta, prior_info)
         # Initialize distribution and graph fitting modules
         self.distribution_fitting_module = DistributionFitting(model=model,
                                                                optimizer=model_optimizer,
@@ -137,11 +140,16 @@ class ENCO(object):
         self.iter_time = -1
         self.dist_fit_time = -1
 
-    def init_graph_params(self, num_vars, lr_gamma, betas_gamma, lr_theta, betas_theta):
+    def init_graph_params(self, num_vars, lr_gamma, betas_gamma, lr_theta, betas_theta,
+                          prior_info):
         """
         Initializes gamma and theta parameters, including their optimizers.
         """
         self.gamma = nn.Parameter(torch.zeros(num_vars, num_vars))  # Init with zero => prob 0.5
+
+        if prior_info is not None:
+            self.gamma = prior_info
+
         self.gamma.data[torch.arange(num_vars), torch.arange(num_vars)] = -9e15  # Mask diagonal
         # For latent confounders, we need to track interventional and observational gradients separat => different opt
         if self.graph.num_latents > 0:
