@@ -28,8 +28,8 @@ class ENCO(object):
                  betas_theta=(0.9, 0.999),
                  model_iters=1000,
                  graph_iters=100,
-                 batch_size=128,
-                 GF_num_batches=1,
+                 batch_size=64,
+                 GF_num_batches=2,
                  GF_num_graphs=100,
                  lambda_sparse=0.004,
                  dataset_size=100000,
@@ -104,18 +104,22 @@ class ENCO(object):
         self.graph = graph
         self.num_vars = graph.num_vars
         num_categs = max([v.prob_dist.num_categs for v in graph.variables])
+
         # Create observational dataset
         obs_dataset = ObservationalCategoricalData(graph, dataset_size=dataset_size)
         obs_data_loader = data.DataLoader(obs_dataset, batch_size=batch_size,
                                           shuffle=True, drop_last=True)
+
         # Create neural networks for fitting the conditional distributions
         model = create_model(num_vars=self.num_vars,
                              num_categs=num_categs,
                              hidden_dims=hidden_dims)
         print("Distribution fitting model:\n" + str(model))
         model_optimizer = torch.optim.Adam(model.parameters(), lr=lr_model, betas=betas_model)
+
         # Initialize graph parameters
         self.init_graph_params(self.num_vars, lr_gamma, betas_gamma, lr_theta, betas_theta, prior_info)
+
         # Initialize distribution and graph fitting modules
         self.distribution_fitting_module = DistributionFitting(model=model,
                                                                optimizer=model_optimizer,
@@ -151,6 +155,7 @@ class ENCO(object):
             self.gamma = prior_info
 
         self.gamma.data[torch.arange(num_vars), torch.arange(num_vars)] = -9e15  # Mask diagonal
+
         # For latent confounders, we need to track interventional and observational gradients separat => different opt
         if self.graph.num_latents > 0:
             self.gamma_optimizer = AdamGamma(self.gamma, lr=lr_gamma, beta1=betas_gamma[0], beta2=betas_gamma[1])
@@ -169,14 +174,18 @@ class ENCO(object):
         for epoch in track(range(num_epochs), leave=False, desc="Epoch loop"):
             self.epoch = epoch
             start_time = time.time()
+
             # Update Model
             self.distribution_fitting_step()
             self.dist_fit_time = time.time() - start_time
+
             # Update graph parameters
             self.graph_fitting_step()
             self.iter_time = time.time() - start_time
+
             # Print stats
             self.print_graph_statistics(epoch=epoch+1, log_metrics=True)
+
             # Early stopping if perfect reconstruction for 5 epochs (for faster prototyping)
             if stop_early and self.is_prediction_correct():
                 num_stops += 1
@@ -193,6 +202,7 @@ class ENCO(object):
         """
         # Probabilities to sample input masks from
         sample_matrix = torch.sigmoid(self.gamma) * torch.sigmoid(self.theta)
+
         # Update model in a loop
         t = track(range(self.model_iters), leave=False, desc="Distribution fitting loop")
         for _ in t:

@@ -25,10 +25,10 @@ class GraphFitting(object):
         graph : CausalDAG
                 Causal graph on which we want to perform causal structure learning.
         num_batches : int
-                      Number of batches to use per MC sample in the graph fitting stage. 
-                      Usually 1, only higher needed if GPU is running out of memory for 
+                      Number of batches to use per MC sample in the graph fitting stage.
+                      Usually 1, only higher needed if GPU is running out of memory for
                       common batch sizes.
-        num_graphs : int 
+        num_graphs : int
                      Number of graph samples to use for estimating the gradients in the
                      graph fitting stage. Usually in the range 20-100.
         theta_only_num_graphs : int
@@ -55,14 +55,14 @@ class GraphFitting(object):
         self.inter_vars = []
         if self.graph.num_vars >= 100 or hasattr(self.graph, "data_int"):
             self.dataset = InterventionalDataset(self.graph,
-                                                 dataset_size=4096,
+                                                 dataset_size=50,
                                                  batch_size=self.batch_size)
 
     def perform_update_step(self, gamma, theta, var_idx=-1, only_theta=False):
         """
         Performs a full update step of the graph fitting stage. We first sample a batch of graphs,
         evaluate them on a interventional data batch, and estimate the gradients for gamma and theta
-        based on the log-likelihoods. 
+        based on the log-likelihoods.
 
         Parameters
         ----------
@@ -71,10 +71,10 @@ class GraphFitting(object):
         theta : nn.Parameter
                 Parameter tensor representing the theta parameters in ENCO.
         var_idx : int
-                  Variable on which should be intervened to obtain the update. If none is given, i.e., 
+                  Variable on which should be intervened to obtain the update. If none is given, i.e.,
                   a negative value, the variable will be randomly selected.
         only_theta : bool
-                     If True, gamma is frozen and the gradients are only estimated for theta. See 
+                     If True, gamma is frozen and the gradients are only estimated for theta. See
                      Appendix D.2 in the paper for details on the gamma freezing stage.
         """
         # Obtain log-likelihood estimates for randomly sampled graph structures
@@ -108,18 +108,18 @@ class GraphFitting(object):
                 Parameter tensor representing the theta parameters in ENCO.
         num_batches : int
                       Number of batches to use per MC sample.
-        num_graphs : int 
+        num_graphs : int
                      Number of graph structures to sample.
         batch_size : int
-                     Size of interventional data batches.     
+                     Size of interventional data batches.
         var_idx : int
-                  Variable on which should be intervened to obtain the update. If none is given, i.e., 
+                  Variable on which should be intervened to obtain the update. If none is given, i.e.,
                   a negative value, the variable will be randomly selected.
         mirror_graphs : bool
                         This variable should be true if only theta is optimized. In this case, the first
                         half of the graph structure samples is identical to the second half, except that
                         the values of the outgoing edges of the intervened variable are flipped. This
-                        allows for more efficient, low-variance gradient estimators. See details in 
+                        allows for more efficient, low-variance gradient estimators. See details in
                         the paper.
         """
         if mirror_graphs:
@@ -139,6 +139,7 @@ class GraphFitting(object):
             int_sample = self.graph.sample(interventions=intervention_dict,
                                            batch_size=num_batches*batch_size,
                                            as_array=True)
+
             int_sample = torch.from_numpy(int_sample).long().to(device)
 
         # Split number of graph samples acorss multiple iterations if not all can fit into memory
@@ -190,7 +191,7 @@ class GraphFitting(object):
     def gradient_estimator(self, adj_matrices, log_likelihoods, gamma, theta, var_idx):
         """
         Returns the estimated gradients for gamma and theta. It uses the low-variance gradient estimators
-        proposed in Section 3.3 of the paper. 
+        proposed in Section 3.3 of the paper.
 
         Parameters
         ----------
@@ -204,7 +205,7 @@ class GraphFitting(object):
         theta : nn.Parameter
                 Parameter tensor representing the theta parameters in ENCO.
         var_idx : int
-                  Variable on which the intervention was performed. 
+                  Variable on which the intervention was performed.
         """
         batch_size = adj_matrices.shape[0]
         log_likelihoods = log_likelihoods.unsqueeze(dim=1)

@@ -136,3 +136,8 @@ causal_graphs/real_data/
 causal_graphs/synthetic_graphs/
 causal_graphs/confounder_graphs/
 causal_graphs/exported_graphs.zip
+
+# Images
+*.png
+.gitignore
+

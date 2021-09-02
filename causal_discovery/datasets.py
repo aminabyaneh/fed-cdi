@@ -9,18 +9,18 @@ class ObservationalCategoricalData(data.Dataset):
     def __init__(self, graph, dataset_size):
         """
         Dataset for simplifying the interaction with observational data
-        in the distribution fitting stage. If the causal graph does not 
+        in the distribution fitting stage. If the causal graph does not
         have a pre-sampled dataset, a new dataset is sampled.
 
         Parameters
         ----------
         graph : CausalDAG
                 The causal graph from which we want to get observational data from.
-                If it has the attribute "data_obs", we use it as the dataset. 
+                If it has the attribute "data_obs", we use it as the dataset.
                 Otherwise, a new dataset is sampled.
         dataset_size : int
-                       The size of the dataset to sample if no observational dataset
-                       is provided in the first place.
+                The size of the dataset to sample if no observational dataset
+                is provided in the first place.
         """
         super().__init__()
         self.graph = graph
@@ -56,13 +56,13 @@ class InterventionalDataset(object):
         ----------
         graph : CausalDAG
                 The causal graph from which we want to get interventional data
-                from. If it has the attribute "data_int", we use it as the dataset. 
+                from. If it has the attribute "data_int", we use it as the dataset.
                 Otherwise, a new dataset is sampled.
         dataset_size : int
                        Number of samples per variable to sample if no
                        interventional dataset is provided in the first place.
         batch_size : int
-                     Number of samples in a batch that is returned via the 
+                     Number of samples in a batch that is returned via the
                      'get_batch' function.
         num_stacks : int
                      This parameter is only used if no interventional dataset
@@ -120,6 +120,7 @@ class InterventionalDataset(object):
         """
         if isinstance(samples, np.ndarray):
             samples = torch.from_numpy(samples).long()
+
         dataset = data.TensorDataset(samples)
         self.data_loaders[var_idx] = data.DataLoader(dataset, batch_size=self.batch_size,
                                                      shuffle=True, pin_memory=False, drop_last=True)

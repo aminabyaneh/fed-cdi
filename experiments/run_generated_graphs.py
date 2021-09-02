@@ -42,7 +42,7 @@ if __name__ == '__main__':
 
     for gindex in range(args.num_graphs):
         # Seed setting for reproducibility
-        set_seed(args.seed+gindex)  # Need to increase seed, otherwise we might same graphs
+        set_seed(args.seed+gindex)  # Need to increase seed, otherwise we might get the same graphs
         # Generate graph
         print("Generating %s graph with %i variables..." % (args.graph_type, args.num_vars))
         graph = generate_categorical_graph(num_vars=args.num_vars,
