@@ -23,10 +23,11 @@
 # limitations under the License.
 # ========================================================================
 
-import os.path
+import os
 from abc import ABC, abstractmethod
 from typing import List
 
+import torch
 import numpy as np
 import pandas as pd
 import networkx as nx
@@ -38,6 +39,14 @@ from networkx import DiGraph, circular_layout
 
 from logging_settings import logger
 
+sys.path.append(os.path.join(os.pardir, 'causal_discovery'))
+sys.path.append(os.path.join(os.pardir, 'causal_graphs'))
+
+from causal_discovery.enco import ENCO
+from causal_graphs.graph_definition import CausalDAG, CausalDAGDataset
+from causal_graphs.graph_generation import generate_categorical_graph, get_graph_func
+from causal_graphs.graph_visualization import visualize_graph
+from causal_graphs.variable_distributions import _random_categ
 
 class InferenceAlgorithm(ABC):
     """
@@ -126,8 +135,6 @@ class InferenceAlgorithm(ABC):
         """
         Load only a part of observations/variables from a global dataset to implement locality
         and privacy of data.
-
-        # TODO: Implement import dataset from directory.
 
         Args:
             accessible_data (List[str] or float): Choose how much of the dataset can the client see.
@@ -379,3 +386,128 @@ class DSDIAlg(InferenceAlgorithm):
             os.system(command=execution_command)
         except ModuleNotFoundError:
             logger.critical('Activate conda environment according to DSDI manual!')
+
+
+class ENCOAlg(InferenceAlgorithm):
+    """
+    Wrapper implementation for the ENCO algorithm introduced by Philipe et. al.
+
+    The proposed method has the ability to incorporate a prior belief matrix at the beginning of
+    each iteration, which makes it a perfect candidate for a federated setup where the model is
+    getting updated and- hopefully- improved over the iterations.
+
+    Note: A forked version of this repository is used along with the federated dir.
+    """
+
+    def __init__(self):
+        """
+        Initialize a ENCO Algorithm class.
+
+        Note: Before running this function, you have to make sure that conda environment related to
+        DSDI algorithm is up and running (named enco). For this purpose, follow the guidelines
+        in the README file of the repository.
+
+        """
+
+        super().__init__()
+
+    def build_global_dataset(self, obs_data_size: int, int_data_size: int, num_vars: int,
+                             graph_type: str, seed: int = 0, num_categs: int = 10):
+        """
+        The function builds a graph and an external dataset using soft intervention and
+        online sampling from the respective graph.
+        """
+
+        self._graph = generate_categorical_graph(num_vars=num_vars,
+                                                 min_categs=num_categs,
+                                                 max_categs=num_categs,
+                                                 use_nn=True,
+                                                 graph_func=get_graph_func(graph_type),
+                                                 seed=seed)
+        logger.info(f'Graph is built with the provided information: \n {graph}')
+
+        self.original_adjacency_mat = graph.adj_matrix
+        logger.info(f'Global dataset adjacency matrix: \n {adj_matrix}')
+
+        self._data = graph.sample(batch_size=obs_data_size, as_array=True)
+        logger.info(f'Shape of observational data: {self._data.shape}')
+
+        self._data_int = self._sample_int_data(self, int_data_size)
+        logger.info(f'Shape of interventional data: {self._data_int.shape}')
+
+        self._global_dataset_dag = CausalDAGDataset(self.original_adjacency_mat,
+                                                    self._data, self._data_int)
+
+    def _sample_int_data(self, int_data_size: int):
+        """
+        Build an interventional dataset based on the provided parameters.
+        """
+        data_int: np.ndarray = None
+
+        for var_idx in range(len(self._graph.variables)):
+
+            # Select variable to intervene on
+            var = self._graph.variables[var_idx]
+
+            # Soft, perfect intervention => replace p(X_n) by random categorical
+            # Scale is set to 0.0, which represents a uniform distribution.
+            int_dist = _random_categ(size=(var.prob_dist.num_categs,), scale=0.0, axis=-1)
+
+            # Sample from interventional distribution
+            value = np.random.multinomial(n=1, pvals=int_dist,
+                                        size=(int_data_size // len(self._graph.variables),))
+            value = np.argmax(value, axis=-1)
+
+            intervention_dict = {var.name: value}
+            int_sample = graph.sample(interventions=intervention_dict,
+                                    batch_size=(int_data_size // len(self._graph.variables)),
+                                    as_array=True)
+
+            data_int = np.array([int_sample]) if data_int is None \
+                                              else np.append(data_int,
+                                                              np.array([int_sample]),
+                                                              axis=0)
+
+    def load_local_dataset(self, accessible_data: List[str] or float,
+                           assignment_type: str = 'observation_assignment',
+                           dataset_name: str = "sachs", import_from_directory: bool = False):
+        """
+        Note: This is currently disabled in this class since the local dataset is distributed online,
+        rather than how it is handled in other classes by distribution of a DataFrame and CSV files.
+
+        Should be implemented upon usage of external datasets.
+        """
+
+        pass
+
+    def _build_local_dataset(self, accessible_percentage: int, num_clients: int, client_id: int):
+        """
+        Build the local dataset for an specific client.
+        """
+
+        if len(self._data) == 0 or len(self._data_int) == 0:
+            logger.error(f'Initialize a global dataset first!')
+
+
+
+    def infer_causal_structure(self, dataset_dag: CausalDAGDataset, accessible_percentage: int = 100,
+                               num_clients: int = 5, client_id: int = 0, round_id: int = 0,
+                               experiment_id: int = 0, num_epochs: int = 10,
+                               gamma_belief: str or None = None):
+        """
+        This function calls an inference algorithm using ENCO core functions and class, given a dataset_dag.
+
+        The parameters may be set here, or leave them to the default values instead.
+        For more information, refer to ENCO github page.
+        """
+
+        dataset_dag = self._build_local_dataset()
+
+        enco_module = ENCO(graph=dataset_dag)
+        if torch.cuda.is_available():
+            logger.info('Found Cuda device!')
+            enco_module.to(torch.device('cuda:0'))
+
+        self.predicted_adj_matrix = enco_module.discover_graph(num_epochs=10)
+
+
