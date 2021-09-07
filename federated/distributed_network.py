@@ -35,10 +35,10 @@ import torch.multiprocessing as mp
 from causal_learning import LiNGAM
 from logging_settings import logger
 
-""" Commands related to local port setting: 
+""" Commands related to local port resetting:
 
       1. # fuser 29500/tcp: View all the processes attached to the port.
-      2. # kill -9 $(fuser 29500/tcp 2>/dev/null): To kill all of them!    
+      2. # kill -9 $(fuser 29500/tcp 2>/dev/null): To kill all of them!
 """
 
 # The array containing all the processes created by multiprocessing module.
@@ -179,11 +179,6 @@ class Network:
         """
         The agent running this function is instructed to perform a lingam on a specified dataset.
 
-        This function is implemented based on the algorithm proposed by Maes et. al.:
-                        https://ieeexplore.ieee.org/document/1565554
-
-        TODO: Add other inference algorithms.
-
         Args:
             agent_rank (int): The id or rank of the current agent running this distributed
             function.
@@ -213,7 +208,5 @@ class Network:
                     f'is: \n {causal_model.inferred_adjacency_mat}')
 
         # Phase 2: Negotiation
-
         # Phase 3: Post-processing
-
         # Phase 4: Directing

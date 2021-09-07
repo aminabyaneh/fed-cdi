@@ -5,8 +5,6 @@ import sys
 """We import PyTorch and Numpy on which the ENCO implementation is based on."""
 
 # Commented out IPython magic to ensure Python compatibility.
-import matplotlib.pyplot as plt
-
 import torch
 import numpy as np
 
@@ -17,7 +15,7 @@ All functionalities for this purpose have been summarized in the folder `causal_
 and we import the most important functions below.
 """
 
-from causal_graphs.graph_definition import CausalDAG, CausalDAGDataset  # Base class of causal graphs
+from causal_graphs.graph_definition import CausalDAGDataset  # Base class of causal graphs
 from causal_graphs.graph_generation import generate_categorical_graph, get_graph_func  # Functions for generating new graphs
 from causal_graphs.graph_visualization import visualize_graph  # Plotting the graph in matplotlib
 from causal_graphs.variable_distributions import _random_categ
@@ -137,8 +135,6 @@ if torch.cuda.is_available():
     enco_module.to(torch.device('cuda:0'))
 
 predicted_adj_matrix = enco_module.discover_graph(num_epochs=10)
-
-exit(0)
 
 """
 ## Causal Discovery with ENCO

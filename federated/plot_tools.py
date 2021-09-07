@@ -74,7 +74,7 @@ def set_plot_styles(title: str, x_label: str, y_label: str, save_file_name: str,
     plt.show()
 
 
-def plot_multiple_experiment_sets(experiments_directory: str, baseline_mat: np.ndarray,
+def dsdi_multiple_experiment_sets(experiments_directory: str, baseline_mat: np.ndarray,
                                   experiment_set_id_dict: Dict[str, List[int]],
                                   number_of_rounds: int, labels_dict: Dict[str, List[str]],
                                   colors_dict: Dict[str, List[str]],
@@ -145,21 +145,12 @@ def plot_multiple_experiment_sets(experiments_directory: str, baseline_mat: np.n
                     save_file_name=fig_name)
 
 
-if __name__ == '__main__':
-    ground_truth_chain3 = np.asarray([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]])
+def plot_dsdi_results(graph_type, client_numbers, metric, number_of_rounds):
+    """A temporary function for plotting DSDI results.
+    """
 
-    ground_truth_chain10 = np.asarray([[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                                       [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                                       [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                                       [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                                       [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                                       [0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                                       [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0],
-                                       [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
-                                       [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0],
-                                       [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0]])
-
-    ground_truth_full10 = np.asarray([[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+    if graph_type == 'full10':
+        ground_truth = np.asarray([[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
                                      [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
                                      [1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
                                      [1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
@@ -169,8 +160,8 @@ if __name__ == '__main__':
                                      [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0],
                                      [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0],
                                      [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0]])
-
-    ground_truth_collider10 = np.asarray([[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+    elif graph_type == 'collider10':
+        ground_truth = np.asarray([[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
                                           [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
                                           [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
                                           [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
@@ -180,15 +171,8 @@ if __name__ == '__main__':
                                           [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
                                           [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
                                           [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0]])
-
-    ground_truth_collider5 = np.asarray([[0.0, 0.0, 0.0, 0.0, 0.0],
-                                         [0.0, 0.0, 0.0, 0.0, 0.0],
-                                         [0.0, 0.0, 0.0, 0.0, 0.0],
-                                         [0.0, 0.0, 0.0, 0.0, 0.0],
-                                         [1.0, 1.0, 1.0, 1.0, 0.0]])
-
-
-    ground_truth_jungle10 = np.asarray([[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+    elif graph_type == 'jungle10':
+        ground_truth = np.asarray([[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
                                         [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
                                         [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
                                         [1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
@@ -198,26 +182,22 @@ if __name__ == '__main__':
                                         [0.0, 1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
                                         [0.0, 1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
                                         [0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0]])
-
-    graph_type = 'collider10'
-    client_number = 1
-    client_numbers = [1, 10]
-    metric = 'SHD'
-    baseline = ground_truth_collider10
-    single = True
-    number_of_rounds = 15
-
-    # Collider10: 5: [0, 1, 3, 4, 2] {3, 4, 6, 7, 10}, 1: [1, 3, 0, 2] {3, 6, 8, 12}
-    if single:
-        plot_multiple_experiment_sets(experiments_directory=f'../../FedCL_Data', baseline_mat=baseline,
-                                      experiment_set_id_dict={f'{graph_type}_{client_number}client': [1, 3, 0, 2]},
-                                      number_of_rounds=number_of_rounds,
-                                      labels_dict={f'{graph_type}_{client_number}client': ['3 Int. Batch', '6 Int. Batch', '8 Int. Batch', '12 Int. Batch', '10 Int. Batch']},
-                                      colors_dict={f'{graph_type}_{client_number}client': ['blue', 'brown', 'purple', 'green', 'cyan']},
-                                      fig_name=f'{graph_type}_{client_number}client_{metric}{number_of_rounds}.png', metric=metric,
-                                      title=f'{graph_type} {client_number}-Client')
     else:
-        plot_multiple_experiment_sets(experiments_directory=f'../../FedCL_Data', baseline_mat=baseline,
+        logger.critical('Graph type not implemented, aborting plot...')
+        return
+
+    baseline = ground_truth
+
+    if len(client_numbers) == 1:
+        dsdi_multiple_experiment_sets(experiments_directory=f'../../FedCL_Data', baseline_mat=baseline,
+                                      experiment_set_id_dict={f'{graph_type}_{client_numbers[0]}client': [1, 3, 0, 2]},
+                                      number_of_rounds=number_of_rounds,
+                                      labels_dict={f'{graph_type}_{client_numbers[0]}client': ['3 Int. Batch', '6 Int. Batch', '8 Int. Batch', '12 Int. Batch', '10 Int. Batch']},
+                                      colors_dict={f'{graph_type}_{client_numbers[0]}client': ['blue', 'brown', 'purple', 'green', 'cyan']},
+                                      fig_name=f'{graph_type}_{client_numbers[0]}client_{metric}{number_of_rounds}.png', metric=metric,
+                                      title=f'{graph_type} {client_numbers[0]}-Client')
+    else:
+        dsdi_multiple_experiment_sets(experiments_directory=f'../../FedCL_Data', baseline_mat=baseline,
                                       experiment_set_id_dict={f'{graph_type}_{client_numbers[0]}client': [1, 2],
                                                               f'{graph_type}_{client_numbers[1]}client': [1, 2]},
                                       number_of_rounds=number_of_rounds,
@@ -232,3 +212,12 @@ if __name__ == '__main__':
                                       fig_name=f'{graph_type}_{client_numbers[0]}client_vs_{client_numbers[1]}client_{metric}{number_of_rounds}.png',
                                       metric=metric,
                                       title=f'{graph_type} {client_numbers[0]}-Client vs. {client_numbers[1]}-Client')
+
+
+
+if __name__ == '__main__':
+
+    plot_dsdi_results(graph_type = 'collider10',
+                      client_numbers = [1, 10],
+                      metric = 'SHD',
+                      number_of_rounds = 15)

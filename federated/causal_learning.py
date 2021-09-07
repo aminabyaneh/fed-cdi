@@ -23,7 +23,7 @@
 # limitations under the License.
 # ========================================================================
 
-import os
+import os, sys
 from abc import ABC, abstractmethod
 from typing import List
 
@@ -33,19 +33,17 @@ import pandas as pd
 import networkx as nx
 import matplotlib.pyplot as plt
 
-from cdt.causality.graph import LiNGAM, PC, SAM, GES, GIES
+from cdt.causality.graph import LiNGAM, PC, GIES
 from cdt.data import load_dataset
 from networkx import DiGraph, circular_layout
 
 from logging_settings import logger
 
-sys.path.append(os.path.join(os.pardir, 'causal_discovery'))
-sys.path.append(os.path.join(os.pardir, 'causal_graphs'))
+sys.path.append("../")
 
 from causal_discovery.enco import ENCO
-from causal_graphs.graph_definition import CausalDAG, CausalDAGDataset
+from causal_graphs.graph_definition import CausalDAGDataset
 from causal_graphs.graph_generation import generate_categorical_graph, get_graph_func
-from causal_graphs.graph_visualization import visualize_graph
 from causal_graphs.variable_distributions import _random_categ
 
 class InferenceAlgorithm(ABC):
@@ -424,12 +422,12 @@ class ENCOAlg(InferenceAlgorithm):
                                                  use_nn=True,
                                                  graph_func=get_graph_func(graph_type),
                                                  seed=seed)
-        logger.info(f'Graph is built with the provided information: \n {graph}')
+        logger.info(f'Graph is built with the provided information: \n {self._graph}')
 
-        self.original_adjacency_mat = graph.adj_matrix
-        logger.info(f'Global dataset adjacency matrix: \n {adj_matrix}')
+        self.original_adjacency_mat = self._graph.adj_matrix
+        logger.info(f'Global dataset adjacency matrix: \n {self.original_adjacency_mat}')
 
-        self._data = graph.sample(batch_size=obs_data_size, as_array=True)
+        self._data = self._graph.sample(batch_size=obs_data_size, as_array=True)
         logger.info(f'Shape of observational data: {self._data.shape}')
 
         self._data_int = self._sample_int_data(self, int_data_size)
@@ -459,9 +457,9 @@ class ENCOAlg(InferenceAlgorithm):
             value = np.argmax(value, axis=-1)
 
             intervention_dict = {var.name: value}
-            int_sample = graph.sample(interventions=intervention_dict,
-                                    batch_size=(int_data_size // len(self._graph.variables)),
-                                    as_array=True)
+            int_sample = self._graph.sample(interventions=intervention_dict,
+                                            batch_size=(int_data_size // len(self._graph.variables)),
+                                            as_array=True)
 
             data_int = np.array([int_sample]) if data_int is None \
                                               else np.append(data_int,
@@ -488,7 +486,33 @@ class ENCOAlg(InferenceAlgorithm):
         if len(self._data) == 0 or len(self._data_int) == 0:
             logger.error(f'Initialize a global dataset first!')
 
+        data_length = (self._data.shape[0] // num_clients)
+        start_index = data_length * (client_id - 1)
+        end_index = start_index + data_length - 1
 
+        local_obs_data = self._data[start_index: end_index]
+        logger.info(f'Shape of the local observational data: \n {local_obs_data.shape}')
+
+
+        local_int_data: np.ndarray = None
+        for var_idx in range(self._graph.variables):
+
+            data_length = (self._data_int.shape[1] // num_clients)
+            start_index = data_length * (client_id - 1)
+            end_index = start_index + data_length - 1
+
+            int_sample = self._data_int[var_idx][start_index: end_index]
+
+            local_int_data = np.array([int_sample]) if local_int_data is None \
+                                                    else np.append(local_int_data,
+                                                                   np.array([int_sample]),
+                                                                   axis=0)
+
+            logger.info(f'Shape of the local interventional data: \n {local_int_data.shape}')
+
+        self._local_dag_dataset = CausalDAGDataset(self.original_adjacency_mat,
+                                                   local_obs_data,
+                                                   local_int_data)
 
     def infer_causal_structure(self, dataset_dag: CausalDAGDataset, accessible_percentage: int = 100,
                                num_clients: int = 5, client_id: int = 0, round_id: int = 0,
@@ -508,6 +532,6 @@ class ENCOAlg(InferenceAlgorithm):
             logger.info('Found Cuda device!')
             enco_module.to(torch.device('cuda:0'))
 
-        self.predicted_adj_matrix = enco_module.discover_graph(num_epochs=10)
+        self.predicted_adj_matrix = enco_module.discover_graph(num_epochs=num_epochs)
 
 

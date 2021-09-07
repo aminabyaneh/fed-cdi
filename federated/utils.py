@@ -26,7 +26,7 @@
 import glob
 import os.path
 import random
-from typing import List, Dict
+from typing import List, Dict, Tuple
 
 import numpy as np
 import pandas as pd
@@ -35,49 +35,6 @@ from cdt.metrics import SHD
 from logging_settings import logger
 
 DEFAULT_OBSERVATION_SIZE = 5000
-
-
-# TODO: Remove all the str values around and turn them into Enums.
-
-
-def generate_sample_dataset(assignment_type: str, verbose: bool = True):
-    """
-    Generation of sample dataset for causal learning algorithms.
-
-    Args:
-        assignment_type(str): This option can be either 'variable_assignment' or 'observation_assignment'.
-        verbose (bool): Set False if less logs are required. Defaults to True.
-
-    Returns:
-        Pandas.DataFrame: The generated dataset for experimental purposes.
-    """
-
-    # The adjacency matrix of actual causal graph
-    adj = np.array([[0.0, 0.0, 0.0, 3.0, 0.0, 0.0],
-                    [3.0, 0.0, 2.0, 0.0, 0.0, 0.0],
-                    [0.0, 0.0, 0.0, 6.0, 0.0, 0.0],
-                    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                    [8.0, 0.0, -1.0, 0.0, 0.0, 0.0],
-                    [4.0, 0.0, 0.0, 0.0, 0.0, 0.0]])
-
-    # Causal ordering is important for automation purposes
-    ordering = [3, 0, 2, 1, 4, 5]
-
-    assignment = dict()
-    if assignment_type == 'variable_assignment':
-
-        # Variable assignment dictionary
-        assignment = {1: ['X0', 'X1', 'X2'], 2: ['X1', 'X2', 'X3', 'X4']}
-
-    elif assignment_type == 'observation_assignment':
-
-        # Observation assignment percentages dictionary
-        assignment = {0: 30, 1: 10, 2: 5, 3: 7, 4: 8, 5: 20}
-
-    # Build and return the dataset
-    df = build_experimental_dataset(adjacency_matrix=adj, causal_order=ordering,
-                                    assignment=assignment, verbose=verbose)
-    return df
 
 
 def build_experimental_dataset(adjacency_matrix: np.ndarray, causal_order: List,
@@ -90,8 +47,6 @@ def build_experimental_dataset(adjacency_matrix: np.ndarray, causal_order: List,
     """
     Build an experimental dataset to be used in inference techniques and
     local clients of distributed network.
-
-    TODO: Support more noise distributions.
 
     Args:
         adjacency_matrix (np.ndarray): The adjacency matrix of the data.
@@ -112,7 +67,7 @@ def build_experimental_dataset(adjacency_matrix: np.ndarray, causal_order: List,
     if noise_distribution == 'uniform':
         n_dist = np.random.uniform
     elif noise_distribution == 'gaussian':
-        pass
+        n_dist = np.random.gaussian
 
     for variable_index in causal_order:
 
@@ -277,7 +232,7 @@ def retrieve_dsdi_stored_data(dir: str, experiment_id: int, round_id: int):
     """
 
     load_dir = f'{dir}/experiment_{experiment_id}/Gamma_Data_{round_id}_*'
-    
+
     for filename in glob.glob(load_dir):
         yield np.load(filename, allow_pickle=True)
 
@@ -300,3 +255,30 @@ def resume_dsdi_experiments(basename: str = 'experiment_') -> int:
         start_from = max(existing_experiments_ids)
 
     return start_from
+
+
+def generate_npy_prior_matrix(matrix: np.ndarray = None,
+                              dimensions: Tuple = (3, 3), file_name: str = 'prior_info',
+                              directory: str = 'CausalLearningFederated/data/'):
+    """
+    Generating a sample prior matrix to test basic functionalities of the integrated repository.
+
+    Args:
+        matrix (np.ndarray): The matrix object in case a non-random matrix is needed. If blank,
+        a random matrix is generated.
+
+        dimensions (Tuple): The dimensions of the adjacency matrix.
+        file_name (str): Name of the file to be saved.
+        directory (str): The directory of the saved file.
+
+    Returns:
+        np.ndarray: The randomized matrix of priors.
+    """
+
+    if matrix is None:
+        mat = np.random.uniform(low=0, high=1, size=dimensions)
+    else:
+        mat = matrix
+
+    logger.info(f'Generated prior information is: {mat}')
+    save_data_object(mat, file_name=file_name, save_directory=directory)

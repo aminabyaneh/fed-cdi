@@ -31,7 +31,7 @@ from experiments import Experiments
 from config_handle import Parser, Configs
 
 
-def parallel_experiment():
+def parallel_federated_experiments_dsdi():
     """
     This functions is capable on running a series of experiment as a job array on
     the Tuebingen cluster.
@@ -66,4 +66,4 @@ def parallel_experiment():
 
 
 if __name__ == '__main__':
-    parallel_experiment()
+    parallel_federated_experiments_dsdi()

@@ -22,38 +22,37 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ========================================================================
-import glob
-import logging
-import os
-import time
 
+import os
 import numpy as np
 
-from causal_learning import InferenceAlgorithm, DSDIAlg
+from typing import Callable, List
+from multiprocessing import Process
+
+from causal_learning import DSDIAlg, ENCOAlg
 from distributed_network import Network
 from logging_settings import logger
-from utils import evaluate_inferred_matrix, resume_dsdi_experiments
+
+from utils import evaluate_inferred_matrix
 from utils import generate_accessible_percentages
 from utils import save_data_object
 from utils import retrieve_dsdi_stored_data
-from typing import Callable, List
-from multiprocessing import Pool, Process
 
 """
-Prerequisites (related to CDT): 
+Prerequisites (related to CDT):
 
     1. Install R.
     2. Go into R terminal and type: install.packages("BiocManager")
-    3.1 In the shell: 
+    3.1 In the shell:
             sudo apt install libxml2-dev
             sudo apt install libgsl-dev
 
-    3.2 Also type this in R terminal: 
-            BiocManager::install(c("CAM", "SID", "bnlearn", "pcalg", "kpcalg", "D2C", "devtools", 
+    3.2 Also type this in R terminal:
+            BiocManager::install(c("CAM", "SID", "bnlearn", "pcalg", "kpcalg", "D2C", "devtools",
                                    "momentchi2", "MASS", "gsl"))
-            
-            Note: you might have to install each separately and in different order if one does not 
-            work properly. 
+
+            Note: you might have to install each separately and in different order if one does not
+            work properly.
 
     4. In your shell:
 
@@ -97,7 +96,7 @@ class Experiments:
         logger.info('\n EXPERIMENT CONCLUDED: Network Send/Recv\n')
 
     @staticmethod
-    def experiment_causal_algorithms(algorithm: Callable, experiment_id: int = 0, verbose: bool = True,
+    def baseline_causal_algorithms(algorithm: Callable, experiment_id: int = 0, verbose: bool = True,
                                      show_graphs: bool = False):
         """
         Testing the results of causal inference algorithms.
@@ -176,7 +175,7 @@ class Experiments:
         logger.info(f'\nEXPERIMENT {experiment_id} CONCLUDED: {algorithm.__name__} \n')
 
     @staticmethod
-    def experiment_dsdi_federated(experiment_id: int = 0, number_of_rounds: int = 10,
+    def dsdi_federated(experiment_id: int = 0, number_of_rounds: int = 10,
                                   number_of_clients: int = 5, accessible_segment=(100, 100),
                                   graph_structure: str = 'chain3',
                                   store_folder: str = 'default_experiments',
@@ -266,13 +265,13 @@ class Experiments:
             process_list.clear()
 
             # AGGREGATION STEP
-            logging.info(f'Calculated matrices:\n')
+            logger.info(f'Calculated matrices:\n')
             aggregated_adjacency_matrix: np.ndarray = None
             access_sum: int = 0
 
             data_dir = os.path.join('work', store_folder)
             for data in retrieve_dsdi_stored_data(data_dir, experiment_id, round_id):
-                print(data)
+                logger.info(f'Retrieved data: \n {data}')
 
                 if aggregated_adjacency_matrix is None:
                     aggregated_adjacency_matrix = data[0] * data[1]
@@ -282,30 +281,27 @@ class Experiments:
                 access_sum += data[0]
             print('\n')
 
-            logging.info(f'Voting result: {access_sum}, \n{aggregated_adjacency_matrix}')
+            logger.info(f'Voting result: {access_sum}, \n{aggregated_adjacency_matrix}')
             prior_info: np.ndarray = aggregated_adjacency_matrix / access_sum
-            logging.info(f'Prior matrix: \n{prior_info}')
+            logger.info(f'Prior matrix: \n{prior_info}')
 
             os.makedirs(prior_dir, exist_ok=True)
             save_data_object(prior_info, f'prior_info_{experiment_id}', prior_dir)
 
         logger.info(f'\nEXPERIMENT {experiment_id} CONCLUDED: DSDI Federated \n')
 
+    @staticmethod
+    def enco_federated():
+
+        enco_module = ENCOAlg()
+        enco_module.build_global_dataset(obs_data_size=30000, int_data_size=2000,
+                                         num_vars=10, graph_type="full", seed=0)
+
 
 if __name__ == '__main__':
 
     logger.info('Starting the experiment sequence\n')
 
-    # Change to CausalLearningFederated sub-module
-    if os.path.basename(os.getcwd()) != 'CausalLearningFederated':
-        os.chdir(os.pardir)
-
-    number_of_experiments = 1
-
-    init_time = time.time()
-    for ex in range(number_of_experiments):
-        Experiments.experiment_dsdi_federated(experiment_id=ex, number_of_rounds=2,
-                                              number_of_clients=10,
-                                              graph_structure='chain10', store_folder='test')
+    Experiments.enco_federated()
 
     logger.info('All the experiments have been executed')
