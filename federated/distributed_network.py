@@ -32,7 +32,6 @@ import torch
 import torch.distributed as dist
 import torch.multiprocessing as mp
 
-from causal_learning import LiNGAM
 from logging_settings import logger
 
 """ Commands related to local port resetting:
@@ -191,7 +190,7 @@ class Network:
 
         # Set up the local learning algorithm
         if algorithm == 'lingam':
-            causal_model = LiNGAM()
+            causal_model = None
         else:
             raise NotImplementedError
 

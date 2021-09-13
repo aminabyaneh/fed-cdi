@@ -26,42 +26,19 @@
 import os
 import numpy as np
 
-from typing import Callable, List
-from multiprocessing import Process
+from typing import List, Tuple
+from numpy.lib.function_base import hamming
+from torch.cuda import device_count
+from torch.multiprocessing import Process, set_start_method
+
 
 from causal_learning import DSDIAlg, ENCOAlg
 from distributed_network import Network
 from logging_settings import logger
 
-from utils import evaluate_inferred_matrix
 from utils import generate_accessible_percentages
 from utils import save_data_object
 from utils import retrieve_dsdi_stored_data
-
-"""
-Prerequisites (related to CDT):
-
-    1. Install R.
-    2. Go into R terminal and type: install.packages("BiocManager")
-    3.1 In the shell:
-            sudo apt install libxml2-dev
-            sudo apt install libgsl-dev
-
-    3.2 Also type this in R terminal:
-            BiocManager::install(c("CAM", "SID", "bnlearn", "pcalg", "kpcalg", "D2C", "devtools",
-                                   "momentchi2", "MASS", "gsl"))
-
-            Note: you might have to install each separately and in different order if one does not
-            work properly.
-
-    4. In your shell:
-
-            sudo apt-get -y build-dep libcurl4-gnutls-dev
-            sudo apt-get -y install libcurl4-gnutls-dev
-
-    5. Follow: https://github.com/Diviyan-Kalainathan/RCIT
-"""
-
 
 class Experiments:
     """
@@ -96,85 +73,6 @@ class Experiments:
         logger.info('\n EXPERIMENT CONCLUDED: Network Send/Recv\n')
 
     @staticmethod
-    def baseline_causal_algorithms(algorithm: Callable, experiment_id: int = 0, verbose: bool = True,
-                                     show_graphs: bool = False):
-        """
-        Testing the results of causal inference algorithms.
-
-        Args:
-            algorithm (InferenceAlgorithm): Class of the algorithm to be selected for the experiment.
-            The acceptable classes are available in causal_learning file.
-
-            verbose (bool): Whether to show logs or not during the experiment.
-            experiment_id (int): A way to distinct between various output files.
-            Defaults to 0 to replace output results.
-
-            show_graphs (bool): Whether to display the original causal graphs or not.
-        """
-
-        logger.info(f'\nEXPERIMENT {experiment_id} STARTED: {algorithm.__name__}\n')
-
-        # Determine the number of clients
-        number_of_clients = 50
-
-        # Generate accessible parts of dataset
-        accessible_percentages_dict = generate_accessible_percentages(number_of_clients, 5, 100)
-
-        # Find a baseline result using hole dataset
-        client_model = algorithm()
-        client_model.load_local_dataset(accessible_data=100)
-
-        # Infer the underlying structure and weights
-        client_model.infer_causal_structure()
-        baseline_adjacency_matrix = client_model.inferred_adjacency_mat
-        logger.info(f'The baseline matrix is: \n {baseline_adjacency_matrix}')
-
-        # Show the baseline graph
-        if show_graphs:
-            client_model.visualize_causal_graph(file_name='baseline')
-
-        # Create a dictionary to store results
-        warm_start_graph = None
-        output_dictionary = dict()
-
-        for client_id in range(1, number_of_clients + 1):
-
-            # Build a lingam model and load dataset
-            client_model = algorithm(verbose=False)
-            client_model.load_local_dataset(accessible_data=accessible_percentages_dict[client_id])
-
-            # Infer the underlying structure and weights
-            if warm_start_graph is None:
-                client_model.infer_causal_structure()
-            else:
-                logger.info('Warm up start initiated')
-                client_model.infer_causal_structure(warm_start_graph)
-
-            # Evaluate the result
-            evaluation_result = evaluate_inferred_matrix(baseline_adjacency_matrix,
-                                                         client_model.inferred_adjacency_mat)
-
-            if verbose:
-                logger.info(f'\n Client Id: {client_id} '
-                            f'\t Dataset size: {client_model.get_observations_size()}'
-                            f'\n Inferred matrix: \n {client_model.inferred_adjacency_mat} \n'
-                            f' Euclidean Distance: {evaluation_result["ED"]} \n'
-                            f' Precision-recall: {evaluation_result["PR"]} \n'
-                            f' SID Score: {evaluation_result["SID"]} \n'
-                            f' SHD Score: {evaluation_result["SHD"]} \n')
-
-            # Show the acquired graph
-            if show_graphs:
-                client_model.visualize_causal_graph(file_name='client' + str(client_id))
-
-            # Create a dictionary based on observation sizes and metrics
-            output_dictionary[client_model.get_observations_size()] = evaluation_result
-            save_data_object(output_dictionary, f'{algorithm.__name__}_Observation_Sweep_{str(experiment_id)}',
-                             save_directory='output')
-
-        logger.info(f'\nEXPERIMENT {experiment_id} CONCLUDED: {algorithm.__name__} \n')
-
-    @staticmethod
     def dsdi_federated(experiment_id: int = 0, number_of_rounds: int = 10,
                                   number_of_clients: int = 5, accessible_segment=(100, 100),
                                   graph_structure: str = 'chain3',
@@ -199,12 +97,6 @@ class Experiments:
         """
 
         logger.info(f'\nEXPERIMENT {experiment_id} STARTED: DSDI Federated\n')
-
-        # Determine the number of clients
-        number_of_clients = number_of_clients
-
-        # Determine the number of rounds
-        number_of_rounds = number_of_rounds
 
         # Generate accessible parts of dataset
         accessible_percentages_dict = generate_accessible_percentages(number_of_clients, accessible_segment[0],
@@ -291,17 +183,79 @@ class Experiments:
         logger.info(f'\nEXPERIMENT {experiment_id} CONCLUDED: DSDI Federated \n')
 
     @staticmethod
-    def enco_federated():
+    def enco_federated(num_rounds: int = 5, num_clients: int = 5, experiment_id: int = 0,
+                       accessible_data_range: Tuple = (100, 100),
+                       obs_data_size: int = 100000, int_data_size: int = 20000,
+                       int_data_batches: int = 1, num_epochs: int = 2,
+                       num_vars = 20, graph_type: str = "full"):
 
-        enco_module = ENCOAlg()
-        enco_module.build_global_dataset(obs_data_size=30000, int_data_size=2000,
-                                         num_vars=10, graph_type="full", seed=0)
+        logger.info(f'EXPERIMENT {experiment_id} STARTED: ENCO Federated\n')
+        logger.info(f'Found {device_count()} GPU devices')
+
+        try:
+            set_start_method('spawn')
+        except:
+            logger.critical('Failed to set the start method')
+            return
+
+        accessible_percentages_dict = generate_accessible_percentages(num_clients,
+                                                                      accessible_data_range[0],
+                                                                      accessible_data_range[1])
+        # Dataset initialization
+        clients: List[ENCOAlg] = list()
+        for client_id in range(num_clients):
+            if client_id == 0:
+                # Generate a global dataset from scratch
+                enco_module = ENCOAlg(client_id, 100,
+                                      obs_data_size, int_data_size,
+                                      num_vars, num_clients, graph_type)
+                clients.append(enco_module)
+            else:
+                # Load a pre-existing global dataset
+                enco_module = ENCOAlg(client_id=client_id,
+                                      accessible_percentage=accessible_percentages_dict[client_id],
+                                      num_clients=num_clients,
+                                      external_dataset_dag=clients[0].global_dataset_dag)
+                clients.append(enco_module)
+
+        prior_mat: np.ndarray = None
+        results_dict = {client.get_client_id(): hamming_dist for client in clients}
+        for round_id in range(num_rounds):
+            logger.info(f'Initiating round {round_id}')
+
+            # Inference stage
+            process_list = list()
+            for client in clients:
+                process_list.append(Process(target=client.infer_causal_structure,
+                                            args=(prior_mat, num_epochs, round_id, experiment_id)))
+                process_list[-1].start()
+
+            for process in process_list:
+                process.join()
+            process_list.clear()
+
+            # Reload the results
+            for client in clients:
+                client.load_gamma()
+
+            # Aggregation stage
+            accumulated_adj_mat: np.ndarray = None
+            weights: int = 0
+
+            for client in clients:
+                weighted_mat = client.inferred_adjacency_mat * client.get_accessible_percentage()
+                accumulated_adj_mat = weighted_mat if accumulated_adj_mat is None \
+                                                    else (accumulated_adj_mat + weighted_mat)
+
+                weights += client.get_accessible_percentage()
+
+            logger.info(f'Aggregation result: \nWeights = {weights} '
+                        f'\nAccumulation_Matrix = \n{accumulated_adj_mat}')
+
+            prior_mat = accumulated_adj_mat / weights
+
+        logger.info(f'EXPERIMENT {experiment_id} CONCLUDED: ENCO Federated\n')
 
 
 if __name__ == '__main__':
-
-    logger.info('Starting the experiment sequence\n')
-
     Experiments.enco_federated()
-
-    logger.info('All the experiments have been executed')

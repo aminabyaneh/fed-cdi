@@ -29,7 +29,7 @@ class ENCO(object):
                  model_iters=1000,
                  graph_iters=100,
                  batch_size=64,
-                 GF_num_batches=2,
+                 GF_num_batches=5,
                  GF_num_graphs=100,
                  lambda_sparse=0.004,
                  dataset_size=100000,
@@ -152,7 +152,7 @@ class ENCO(object):
         self.gamma = nn.Parameter(torch.zeros(num_vars, num_vars))  # Init with zero => prob 0.5
 
         if prior_info is not None:
-            self.gamma = prior_info
+            self.gamma.data = torch.as_tensor(prior_info)
 
         self.gamma.data[torch.arange(num_vars), torch.arange(num_vars)] = -9e15  # Mask diagonal
 
@@ -194,7 +194,6 @@ class ENCO(object):
                     break
             else:
                 num_stops = 0
-        return self.get_binary_adjmatrix()
 
     def distribution_fitting_step(self):
         """
@@ -217,6 +216,7 @@ class ENCO(object):
         # For large graphs, freeze gamma in every second graph fitting stage
         only_theta = (self.use_theta_only_stage and self.epoch % 2 == 0)
         iters = self.graph_iters if not only_theta else self.theta_only_iters
+
         # Update gamma and theta in a loop
         for _ in track(range(iters), leave=False, desc="Graph fitting loop"):
             self.gamma_optimizer.zero_grad()
@@ -230,6 +230,12 @@ class ENCO(object):
                 else:
                     self.gamma_optimizer.step()
             self.theta_optimizer.step(theta_mask)
+
+    def get_gamma_matrix(self):
+        """
+        Returns the predicted, gamma matrix of the causal graph.
+        """
+        return self.gamma.detach().cpu().numpy()
 
     def get_binary_adjmatrix(self):
         """

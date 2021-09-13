@@ -26,11 +26,11 @@
 import glob
 import os.path
 import random
+
 from typing import List, Dict, Tuple
 
 import numpy as np
 import pandas as pd
-from cdt.metrics import SHD
 
 from logging_settings import logger
 
@@ -126,51 +126,15 @@ def generate_accessible_percentages(number_of_clients: int,
                         maximum_accessible_percentage, num=number_of_clients)
 
         assignment_dictionary = \
-            {client_id + 1: accessible_percentage
+            {client_id: accessible_percentage
              for client_id, accessible_percentage in enumerate(access_values_list)}
 
     else:
-        for client_id in range(1, number_of_clients + 1):
+        for client_id in range(number_of_clients):
             assignment_dictionary[client_id] = random.uniform(minimum_accessible_percentage,
                                                               maximum_accessible_percentage)
 
     return assignment_dictionary
-
-
-def evaluate_inferred_matrix(true_matrix: np.ndarray, predicted_matrix: np.ndarray,
-                             sdh_double_for_anticausal: bool = False) -> Dict[str, float]:
-    """
-    Perform evaluation of results with various integrated metrics.
-
-    Note: For SHD and SID, their values tends to zero as the graphs get more identical.
-
-    Args:
-        true_matrix (numpy.ndarray): The original and correct (known) adjacency matrix.
-        predicted_matrix (numpy.ndarray): The predicted adjacency matrix, inferred by a
-        DAG structure learning algorithm.
-
-        sdh_double_for_anticausal (bool): In SDH method, count the wrong arrows as 2
-        errors instead of 1. Defaults to False.
-
-    Returns:
-        Dict[str: float]: The evaluation result dictionary.
-    """
-
-    # Convert a weighted matrix to (binary) adjacency matrix
-    true_structure = weighted_matrix_to_binary(true_matrix)
-    predicted_structure = weighted_matrix_to_binary(predicted_matrix)
-
-    # Create the evaluation dictionary
-    evaluation_dict: Dict[str, float] = dict()
-
-    # Structural Hamming Distance metric
-    evaluation_dict['SHD'] = SHD(true_structure,
-                                 predicted_structure)
-
-    # Euclidean distance of two matrix
-    evaluation_dict['ED'] = np.linalg.norm(true_matrix - predicted_matrix)
-
-    return evaluation_dict
 
 
 def weighted_matrix_to_binary(matrix: np.ndarray) -> np.ndarray:
