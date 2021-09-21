@@ -24,6 +24,7 @@
 # ========================================================================
 
 import os
+import pickle
 from typing import Dict, List
 
 import numpy as np
@@ -31,7 +32,6 @@ import seaborn
 from matplotlib import pyplot as plt
 
 from logging_settings import logger
-from utils import retrieve_dsdi_stored_data, evaluate_inferred_matrix
 
 
 def set_plot_styles(title: str, x_label: str, y_label: str, save_file_name: str,
@@ -74,150 +74,57 @@ def set_plot_styles(title: str, x_label: str, y_label: str, save_file_name: str,
     plt.show()
 
 
-def dsdi_multiple_experiment_sets(experiments_directory: str, baseline_mat: np.ndarray,
-                                  experiment_set_id_dict: Dict[str, List[int]],
-                                  number_of_rounds: int, labels_dict: Dict[str, List[str]],
-                                  colors_dict: Dict[str, List[str]],
-                                  fig_name: str = 'compare_performance.png', metric='ED',
-                                  title: str = 'Performance'):
-    """
-    Plot the performance on the server side for more than one set of experiments. Best if you need to compare multiple
-    different sets of experiments.
-
-    Note: The matrices are parsed for each client individually, so later experiments on aggregation step could be
-    performed easier. The aggregation step happens before plotting the error or performance.
-
-    Args:
-        title (str): The title of the plot.
-        experiments_directory (str): The directory where all the experiments are stored.
-        baseline_mat (str): The ground truth for the structure learning algorithm.
-        experiment_set_id_dict (Dict[str, str]): Indicating a list of experiment Ids corresponding to a experiment set
-        to be plotted.
-
-        number_of_rounds (int): For how many rounds do you want to plot each experiment. Should be less than the
-        total number of rounds that you've experimented on.
-
-        labels_dict (Dict[str, List[str]]): Label for each curve or experiment.
-        colors_dict (Dict[str, List[str]]): Color of each curve or experiment.
-        fig_name (str): Name of the figure to be saved. Defaults to 'performance.png'. Change .png suffix to store in
-        other formats.
-
-        metric (str): The performance metric. Refer to utils.py. Defaults to 'ED' (Euclidean Distance).
-    """
+def plot_enco_round_results(folder_name: str, experiment_ids: List[int], labels: List[str],
+                            colors: List[str], title: str = 'default', fig_name: str = 'default.png',
+                            metric: str = "SHD"):
 
     plt.figure(figsize=(12, 12))
     seaborn.set_style("darkgrid")
 
-    rounds = [round_id for round_id in range(number_of_rounds)]
+    for index, experiment_id in enumerate(experiment_ids):
+        dir = os.path.join(os.pardir, 'data', folder_name, f'results_{experiment_id}.pickle')
+        with open(dir, 'rb') as handle:
+            stored_results_dict = pickle.load(handle)
 
-    for experiment_name in experiment_set_id_dict:
-        experiment_directory = os.path.join(experiments_directory, experiment_name)
+        final_results = stored_results_dict['priors']
 
-        for index, experiment_id in enumerate(experiment_set_id_dict[experiment_name]):
+        rounds = [round_id for round_id in range(len(final_results))]
+        metrics = [results_dict[metric] for results_dict in final_results]
 
-            metric_values: List[float] = list()
-
-            for round_id in range(number_of_rounds):
-                aggregated_adjacency_matrix: np.ndarray = None
-                access_sum: int = 0
-
-                for data in retrieve_dsdi_stored_data(experiment_directory, experiment_id, round_id):
-                    if aggregated_adjacency_matrix is None:
-                        aggregated_adjacency_matrix = data[0] * data[1]
-                    else:
-                        aggregated_adjacency_matrix += data[0] * data[1]
-
-                    print(f'Acquired in {experiment_id}:{round_id} \n {data[0]}, {data[1]}')
-                    access_sum += data[0]
-
-                inferred_matrix: np.ndarray = aggregated_adjacency_matrix / access_sum
-                logger.info(f'Inferred matrix at {experiment_id}:{round_id} \n{inferred_matrix}')
-                evaluation_dict = evaluate_inferred_matrix(baseline_mat, inferred_matrix)
-
-                metric_values.append(evaluation_dict[metric])
-
-            plt.plot(rounds, metric_values, label=labels_dict[experiment_name][index], color=colors_dict[experiment_name][index])
-            plt.scatter(rounds, metric_values, c=colors_dict[experiment_name][index])
+        logger.info(f'Experiment {experiment_id} metrics: {metrics}')
+        plt.plot(rounds, metrics, label=labels[index], color=colors[index])
+        plt.scatter(rounds, metrics, c=colors[index])
 
     plt.xticks(rounds)
-    set_plot_styles(title=title, x_label='Round',
-                    y_label='Euclidean Distance' if metric == 'ED' else 'Hamming Distance',
-                    save_file_name=fig_name)
+    set_plot_styles(title=title, x_label='Round Id',
+                    y_label=metric, save_file_name=fig_name)
 
 
-def plot_dsdi_results(graph_type, client_numbers, metric, number_of_rounds):
-    """A temporary function for plotting DSDI results.
-    """
+def plot_enco_clients_results(folder_name: str, experiment_id: int, labels: List[str],
+                              colors: List[str], title: str = 'default', fig_name: str = 'default.png',
+                              metric: str = "SHD"):
 
-    if graph_type == 'full10':
-        ground_truth = np.asarray([[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                                     [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                                     [1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                                     [1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                                     [1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                                     [1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                                     [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0],
-                                     [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0],
-                                     [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0],
-                                     [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0]])
-    elif graph_type == 'collider10':
-        ground_truth = np.asarray([[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                                          [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                                          [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                                          [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                                          [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                                          [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                                          [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                                          [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                                          [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                                          [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0]])
-    elif graph_type == 'jungle10':
-        ground_truth = np.asarray([[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                                        [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                                        [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                                        [1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                                        [1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                                        [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                                        [1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                                        [0.0, 1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                                        [0.0, 1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                                        [0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0]])
-    else:
-        logger.critical('Graph type not implemented, aborting plot...')
-        return
+    plt.figure(figsize=(12, 12))
+    seaborn.set_style("darkgrid")
 
-    baseline = ground_truth
+    dir = os.path.join(os.pardir, 'data', folder_name, f'results_{experiment_id}.pickle')
+    with open(dir, 'rb') as handle:
+        stored_results_dict = pickle.load(handle)
 
-    if len(client_numbers) == 1:
-        dsdi_multiple_experiment_sets(experiments_directory=f'../../FedCL_Data', baseline_mat=baseline,
-                                      experiment_set_id_dict={f'{graph_type}_{client_numbers[0]}client': [1, 3, 0, 2]},
-                                      number_of_rounds=number_of_rounds,
-                                      labels_dict={f'{graph_type}_{client_numbers[0]}client': ['3 Int. Batch', '6 Int. Batch', '8 Int. Batch', '12 Int. Batch', '10 Int. Batch']},
-                                      colors_dict={f'{graph_type}_{client_numbers[0]}client': ['blue', 'brown', 'purple', 'green', 'cyan']},
-                                      fig_name=f'{graph_type}_{client_numbers[0]}client_{metric}{number_of_rounds}.png', metric=metric,
-                                      title=f'{graph_type} {client_numbers[0]}-Client')
-    else:
-        dsdi_multiple_experiment_sets(experiments_directory=f'../../FedCL_Data', baseline_mat=baseline,
-                                      experiment_set_id_dict={f'{graph_type}_{client_numbers[0]}client': [1, 2],
-                                                              f'{graph_type}_{client_numbers[1]}client': [1, 2]},
-                                      number_of_rounds=number_of_rounds,
-                                      labels_dict={
-                                          f'{graph_type}_{client_numbers[0]}client':
-                                              [f'{client_numbers[0]}-Client 5%', f'{client_numbers[0]}-Client 10%'],
-                                          f'{graph_type}_{client_numbers[1]}client':
-                                              [f'{client_numbers[1]}-Client 3-5%', f'{client_numbers[1]}-Client 5-10%']},
-                                      colors_dict={
-                                          f'{graph_type}_{client_numbers[0]}client': ['blue', 'darkblue'],
-                                          f'{graph_type}_{client_numbers[1]}client': ['violet', 'purple']},
-                                      fig_name=f'{graph_type}_{client_numbers[0]}client_vs_{client_numbers[1]}client_{metric}{number_of_rounds}.png',
-                                      metric=metric,
-                                      title=f'{graph_type} {client_numbers[0]}-Client vs. {client_numbers[1]}-Client')
+    for client_id in stored_results_dict:
+        if client_id == 'priors':
+            break
 
+        rounds = [round_id for round_id in range(len(stored_results_dict[client_id]))]
+        metrics = [results_dict[metric] for results_dict in stored_results_dict[client_id]]
 
+        logger.info(f'Experiment {experiment_id} client {client_id} metrics: {metrics}')
+        plt.plot(rounds, metrics, label=labels[client_id], color=colors[client_id])
+        plt.scatter(rounds, metrics, c=colors[client_id])
+
+    plt.xticks(rounds)
+    set_plot_styles(title=title, x_label='Round Id',
+                    y_label=metric, save_file_name=fig_name)
 
 if __name__ == '__main__':
-
-    plot_dsdi_results(graph_type = 'collider10',
-                      client_numbers = [1, 10],
-                      metric = 'SHD',
-                      number_of_rounds = 15)
+    plot_enco_round_results('tests', [0], ['multiple clients'], ['blue'])

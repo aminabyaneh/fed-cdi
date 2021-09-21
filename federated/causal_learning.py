@@ -32,7 +32,6 @@ import networkx as nx
 import matplotlib.pyplot as plt
 
 from typing import List
-from copy import deepcopy
 from abc import ABC, abstractmethod
 from networkx import DiGraph, circular_layout
 
@@ -294,9 +293,10 @@ class ENCOAlg(InferenceAlgorithm):
 
     def __init__(self, client_id: int, accessible_percentage: int = 100,
                  obs_data_size: int = 30000, int_data_size: int = 2000,
-                 num_vars: int = 20, num_clients: int = 5, graph_type: str = "full10",
+                 num_vars: int = 20, num_clients: int = 5, graph_type: str = "full",
                  seed: int = 0, num_categs: int = 10,
-                 external_dataset_dag: CausalDAGDataset or None = None):
+                 external_dataset_dag: CausalDAGDataset or None = None,
+                 batch_size: int = 64):
         """
         Initialize a ENCO Algorithm class.
 
@@ -306,10 +306,15 @@ class ENCOAlg(InferenceAlgorithm):
         """
 
         super().__init__()
+        # Define a orientation mat
+        self.inferred_orientation_mat: np.ndarray = np.ndarray([0])
+        self.metrics_dict = dict()
+        self.prior_metrics_dict = dict()
 
         # Initialize federated properties
         self._client_id = client_id
         self._accessible_p = accessible_percentage
+        self._batch_size = batch_size
 
         # Initialize the global dataset
         if external_dataset_dag is not None:
@@ -424,7 +429,8 @@ class ENCOAlg(InferenceAlgorithm):
                                                    local_obs_data,
                                                    local_int_data)
 
-    def infer_causal_structure(self, gamma_belief: str or None = None, num_epochs: int = 10,
+    def infer_causal_structure(self, gamma_belief: str or None = None,
+                               theta_belief: str or None = None, num_epochs: int = 10,
                                round_id: int = 0, experiment_id: int = 0):
         """
         This function calls an inference algorithm using ENCO core functions and class, given a dataset_dag.
@@ -434,31 +440,20 @@ class ENCOAlg(InferenceAlgorithm):
         """
         logger.info(f'Client {self._client_id} started the inference process')
 
-        enco_module = ENCO(graph=self._local_dag_dataset, prior_info=gamma_belief)
+        enco_module = ENCO(graph=self._local_dag_dataset, prior_gamma=gamma_belief,
+                           prior_theta=theta_belief, batch_size=self._batch_size)
+        self.prior_metrics_dict = enco_module.get_metrics()
+
         if torch.cuda.is_available():
-            gpu_name = f'cuda:{self._client_id}'
+            gpu_name = 'cuda:0'
             enco_module.to(torch.device(gpu_name))
 
         enco_module.discover_graph(num_epochs=num_epochs)
-        self._save_gamma(enco_module.get_gamma_matrix())
-        self._save_metrics(enco_module)
+        self.inferred_orientation_mat = enco_module.get_theta_matrix()
+        self.inferred_adjacency_mat = enco_module.get_gamma_matrix()
+        self.metrics_dict = enco_module.get_metrics()
+
         logger.info(f'Client {self._client_id} finished the inference process')
-
-    def _save_metrics(self, enco_module: ENCO):
-        metrics_dict = enco_module.get_metrics()
-    def _save_gamma(self, gamma_mat):
-        """Saving a npy of acquired gamma.
-        """
-        os.makedirs('gammas', exist_ok=True)
-        with open(f'gammas/gamma_{self._client_id}.npy', 'wb') as f:
-            np.save(f, gamma_mat)
-
-    def load_gamma(self):
-        """Loading the previously stored gamma matrix.
-        """
-        dir = f'gammas/gamma_{self._client_id}.npy'
-        self.inferred_adjacency_mat = np.load(dir, allow_pickle=True)
-        os.remove(dir)
 
     def get_client_id(self):
         """Getter for client id.

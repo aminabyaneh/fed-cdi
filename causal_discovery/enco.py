@@ -18,7 +18,8 @@ class ENCO(object):
 
     def __init__(self,
                  graph,
-                 prior_info=None,
+                 prior_gamma,
+                 prior_theta,
                  hidden_dims=[64],
                  lr_model=5e-3,
                  betas_model=(0.9, 0.999),
@@ -28,8 +29,8 @@ class ENCO(object):
                  betas_theta=(0.9, 0.999),
                  model_iters=1000,
                  graph_iters=100,
-                 batch_size=64,
-                 GF_num_batches=5,
+                 batch_size=128,
+                 GF_num_batches=2,
                  GF_num_graphs=100,
                  lambda_sparse=0.004,
                  dataset_size=100000,
@@ -118,7 +119,8 @@ class ENCO(object):
         model_optimizer = torch.optim.Adam(model.parameters(), lr=lr_model, betas=betas_model)
 
         # Initialize graph parameters
-        self.init_graph_params(self.num_vars, lr_gamma, betas_gamma, lr_theta, betas_theta, prior_info)
+        self.init_graph_params(self.num_vars, lr_gamma, betas_gamma, lr_theta, betas_theta, prior_gamma,
+                               prior_theta)
 
         # Initialize distribution and graph fitting modules
         self.distribution_fitting_module = DistributionFitting(model=model,
@@ -145,14 +147,13 @@ class ENCO(object):
         self.dist_fit_time = -1
 
     def init_graph_params(self, num_vars, lr_gamma, betas_gamma, lr_theta, betas_theta,
-                          prior_info):
+                          prior_gamma, prior_theta):
         """
         Initializes gamma and theta parameters, including their optimizers.
         """
         self.gamma = nn.Parameter(torch.zeros(num_vars, num_vars))  # Init with zero => prob 0.5
-
-        if prior_info is not None:
-            self.gamma.data = torch.as_tensor(prior_info)
+        if prior_gamma is not None:
+            self.gamma.data = torch.as_tensor(prior_gamma)
 
         self.gamma.data[torch.arange(num_vars), torch.arange(num_vars)] = -9e15  # Mask diagonal
 
@@ -163,6 +164,9 @@ class ENCO(object):
             self.gamma_optimizer = torch.optim.Adam([self.gamma], lr=lr_gamma, betas=betas_gamma)
 
         self.theta = nn.Parameter(torch.zeros(num_vars, num_vars))  # Init with zero => prob 0.5
+        if prior_theta is not None:
+            self.theta.data = torch.as_tensor(prior_theta)
+
         self.theta_optimizer = AdamTheta(self.theta, lr=lr_theta, beta1=betas_theta[0], beta2=betas_theta[1])
 
     def discover_graph(self, num_epochs=30, stop_early=False):
@@ -236,6 +240,12 @@ class ENCO(object):
         Returns the predicted, gamma matrix of the causal graph.
         """
         return self.gamma.detach().cpu().numpy()
+
+    def get_theta_matrix(self):
+        """
+        Returns the predicted, theta matrix of the causal graph.
+        """
+        return self.theta.detach().cpu().numpy()
 
     def get_binary_adjmatrix(self):
         """

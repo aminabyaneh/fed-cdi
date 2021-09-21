@@ -23,54 +23,41 @@
 # limitations under the License.
 # ========================================================================
 
-import os
 import sys
-
-from logging_settings import logger
 from experiments import Experiments
+from logging_settings import logger
 
-
-def parallel_experiment():
-
+def parallel_experiments_enco():
+    """ A method to handle parallel MPI cluster experiments.
+    """
     process = int(str(sys.argv[1]))
+    logger.info(f'Starting the experiment sequence for process {process}\n')
 
-    # Configurations
-    number_of_experiments = 8
-    
-    experiment_id = process % number_of_experiments
-    data_id = process // number_of_experiments
-    process = experiment_id 
+    """ Configurations """
+    # Id
+    experiment_id = process
 
-    number_of_rounds = 15
+    # Graph
+    graph_type = "full"
+    num_vars = 30
+    access_list = [(100, 100)]
+    batch_sizes = [50, 60, 70, 80, 90, 100, 110, 120]
 
-    graph_structure = 'tree10'
-    number_of_clients = [5, 1]
-    acc_seg = [(40, 100), (100, 100)]
-    i = number_of_clients[data_id]
-    store_folders = [f'{graph_structure}_{number_of_clients[data_id]}client']
-    
-    tf = 9000
-    train_data = [tf * i] * 8
-    int_data = [2 * i, 3 * i, 4 * i, 5 * i, 6 * i, 7 * i, 8 * i, 9 * i]
-    num_epochs = [10, 10, 10, 10, 10, 10, 10, 10]
-    logger.info(f'Starting the experiment sequence for process {process}: {experiment_id}, {data_id}\n')
+    # Federated
+    num_rounds = 5
+    num_clients = 5
+    obs_data_size = 500000
+    int_data_size = num_vars * 320 * num_vars
+    num_epochs = 3
+    folder_name = f'Graph-{graph_type}-{num_vars}'
 
-    # Change to CausalLearningFederated sub-module
-    if os.path.basename(os.getcwd()) != 'CausalLearningFederated':
-        os.chdir(os.pardir)
-
-    Experiments.experiment_dsdi_federated(experiment_id=experiment_id,
-                                          number_of_rounds=number_of_rounds,
-                                          number_of_clients=number_of_clients[data_id],
-                                          accessible_segment=acc_seg[data_id],
-                                          graph_structure=graph_structure,
-                                          store_folder=store_folders[0],
-                                          train_functional=train_data[process],
-                                          epi_size=int_data[process],
-                                          num_epochs=num_epochs[process])
+    Experiments.enco_federated(num_rounds, num_clients, experiment_id, folder_name,
+                               access_list[0], obs_data_size,
+                               int_data_size, num_epochs, num_vars, graph_type,
+                               batch_sizes[experiment_id])
 
     logger.info(f'Ending the experiment sequence for process {process}\n')
 
 
 if __name__ == '__main__':
-    parallel_experiment()
+    parallel_experiments_enco()
