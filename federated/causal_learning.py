@@ -295,8 +295,7 @@ class ENCOAlg(InferenceAlgorithm):
                  obs_data_size: int = 30000, int_data_size: int = 2000,
                  num_vars: int = 20, num_clients: int = 5, graph_type: str = "full",
                  seed: int = 0, num_categs: int = 10,
-                 external_dataset_dag: CausalDAGDataset or None = None,
-                 batch_size: int = 64):
+                 external_dataset_dag: CausalDAGDataset or None = None):
         """
         Initialize a ENCO Algorithm class.
 
@@ -314,7 +313,6 @@ class ENCOAlg(InferenceAlgorithm):
         # Initialize federated properties
         self._client_id = client_id
         self._accessible_p = accessible_percentage
-        self._batch_size = batch_size
 
         # Initialize the global dataset
         if external_dataset_dag is not None:
@@ -374,14 +372,15 @@ class ENCOAlg(InferenceAlgorithm):
             # Scale is set to 0.0, which represents a uniform distribution.
             int_dist = _random_categ(size=(var.prob_dist.num_categs,), scale=0.0, axis=-1)
 
+            size = (int_data_size // len(self._graph.variables)) + 1
             # Sample from interventional distribution
             value = np.random.multinomial(n=1, pvals=int_dist,
-                                        size=(int_data_size // len(self._graph.variables),))
+                                        size=(size,))
             value = np.argmax(value, axis=-1)
 
             intervention_dict = {var.name: value}
             int_sample = self._graph.sample(interventions=intervention_dict,
-                                            batch_size=(int_data_size // len(self._graph.variables)),
+                                            batch_size=size,
                                             as_array=True)
 
             data_int = np.array([int_sample]) if data_int is None \
@@ -441,7 +440,7 @@ class ENCOAlg(InferenceAlgorithm):
         logger.info(f'Client {self._client_id} started the inference process')
 
         enco_module = ENCO(graph=self._local_dag_dataset, prior_gamma=gamma_belief,
-                           prior_theta=theta_belief, batch_size=self._batch_size)
+                           prior_theta=theta_belief)
         self.prior_metrics_dict = enco_module.get_metrics()
 
         if torch.cuda.is_available():

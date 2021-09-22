@@ -74,7 +74,7 @@ class Experiments:
     def enco_federated(num_rounds: int = 5, num_clients: int = 5, experiment_id: int = 0,
                        folder_name: str = 'tests', accessible_data_range: Tuple = (40, 60),
                        obs_data_size: int = 100000, int_data_size: int = 20000, num_epochs: int = 2,
-                       num_vars = 20, graph_type: str = "full", batch_size: int = 64):
+                       num_vars = 20, graph_type: str = "full"):
 
         logger.info(f'EXPERIMENT {experiment_id} STARTED: ENCO Federated\n')
         logger.info(f'Found {device_count()} GPU devices')
@@ -89,15 +89,14 @@ class Experiments:
                 # Generate a global dataset from scratch
                 enco_module = ENCOAlg(client_id, accessible_percentages_dict[client_id],
                                       obs_data_size, int_data_size,
-                                      num_vars, num_clients, graph_type, batch_size=batch_size)
+                                      num_vars, num_clients, graph_type)
                 clients.append(enco_module)
             else:
                 # Load a pre-existing global dataset
                 enco_module = ENCOAlg(client_id=client_id,
                                       accessible_percentage=accessible_percentages_dict[client_id],
                                       num_clients=num_clients,
-                                      external_dataset_dag=clients[0].global_dataset_dag,
-                                      batch_size=batch_size)
+                                      external_dataset_dag=clients[0].global_dataset_dag)
                 clients.append(enco_module)
 
         prior_gamma: np.ndarray = None

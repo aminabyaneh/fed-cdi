@@ -34,27 +34,28 @@ def parallel_experiments_enco():
     logger.info(f'Starting the experiment sequence for process {process}\n')
 
     """ Configurations """
+
     # Id
     experiment_id = process
 
     # Graph
     graph_type = "full"
-    num_vars = 30
+    num_vars = 50
     access_list = [(100, 100)]
-    batch_sizes = [50, 60, 70, 80, 90, 100, 110, 120]
+    int_sample_sizes = [1, 2, 3, 4, 5, 8, 11, 13]
 
     # Federated
     num_rounds = 5
     num_clients = 5
     obs_data_size = 500000
-    int_data_size = num_vars * 320 * num_vars
-    num_epochs = 3
-    folder_name = f'Graph-{graph_type}-{num_vars}'
+    int_data_size = 64 * (int_sample_sizes[experiment_id] * num_vars) * num_clients
+    num_epochs = 2
+    folder_name = f'Graph-{graph_type}-{num_vars}-{obs_data_size}-{int_data_size}'
 
-    Experiments.enco_federated(num_rounds, num_clients, experiment_id, folder_name,
+    Experiments.enco_federated(num_rounds, num_clients, experiment_id,
+                               folder_name,
                                access_list[0], obs_data_size,
-                               int_data_size, num_epochs, num_vars, graph_type,
-                               batch_sizes[experiment_id])
+                               int_data_size, num_epochs, num_vars, graph_type)
 
     logger.info(f'Ending the experiment sequence for process {process}\n')
 
