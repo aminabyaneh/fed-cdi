@@ -23,6 +23,7 @@
 # limitations under the License.
 # ========================================================================
 
+import logging
 import os
 import pickle
 import numpy as np
@@ -71,10 +72,10 @@ class Experiments:
         logger.info('\n EXPERIMENT CONCLUDED: Network Send/Recv\n')
 
     @staticmethod
-    def enco_federated(num_rounds: int = 5, num_clients: int = 5, experiment_id: int = 0,
+    def enco_federated(num_rounds: int = 5, num_clients: int = 5, experiment_id: int = 0, repeat_id: int = 0,
                        folder_name: str = 'tests', accessible_data_range: Tuple = (40, 60),
                        obs_data_size: int = 100000, int_data_size: int = 20000, num_epochs: int = 2,
-                       num_vars = 20, graph_type: str = "full"):
+                       num_vars = 20, graph_type: str = "full", edge_prob: float or None = None):
 
         logger.info(f'EXPERIMENT {experiment_id} STARTED: ENCO Federated\n')
         logger.info(f'Found {device_count()} GPU devices')
@@ -89,14 +90,14 @@ class Experiments:
                 # Generate a global dataset from scratch
                 enco_module = ENCOAlg(client_id, accessible_percentages_dict[client_id],
                                       obs_data_size, int_data_size,
-                                      num_vars, num_clients, graph_type)
+                                      num_vars, num_clients, graph_type, edge_prob=edge_prob)
                 clients.append(enco_module)
             else:
                 # Load a pre-existing global dataset
                 enco_module = ENCOAlg(client_id=client_id,
                                       accessible_percentage=accessible_percentages_dict[client_id],
                                       num_clients=num_clients,
-                                      external_dataset_dag=clients[0].global_dataset_dag)
+                                      external_dataset_dag=clients[0].global_dataset_dag, edge_prob=edge_prob)
                 clients.append(enco_module)
 
         prior_gamma: np.ndarray = None
@@ -131,21 +132,31 @@ class Experiments:
 
                 weights += client.get_accessible_percentage()
 
-            logger.info(f'Aggregation Result: \nWeights = {weights} '
-                        f'\nAccumulation Matrix Gamma = \n{accumulated_gamma_mat}'
-                        f'\nAccumulation Matrix Theta = \n{accumulated_theta_mat}')
 
             prior_gamma = accumulated_gamma_mat / weights
             prior_theta = accumulated_theta_mat / weights
 
-            results_dict['priors'].append(clients[0].prior_metrics_dict)
-            logger.info(f'End of the round results: {clients[0].prior_metrics_dict}')
+            logger.info(f'\nMatrix Gamma = \n{accumulated_gamma_mat}'
+                        f'\nMatrix Theta = \n{accumulated_theta_mat}')
+
+            adj = (prior_gamma > 0.0) * (prior_theta > 0.0)
+            adj = (adj == 1)
+
+            if round_id != 0:
+                results_dict['priors'].append(clients[0].prior_metrics_dict)
+            if round_id == (num_rounds - 1):
+                logger.info("Filling the last federated result")
+                clients[0].infer_causal_structure(prior_gamma, prior_theta, num_epochs,
+                                                 round_id, experiment_id)
+                results_dict['priors'].append(clients[0].prior_metrics_dict)
+
+            logger.info(f'End of the round results: \n {clients[0].prior_metrics_dict} \n {adj}')
 
         # Save the results dictionary
         save_dir = os.path.join(os.pardir, 'data', folder_name)
         os.makedirs(save_dir, exist_ok=True)
 
-        file_dir = os.path.join(save_dir, f'results_{experiment_id}.pickle')
+        file_dir = os.path.join(save_dir, f'results_{experiment_id}_{repeat_id}.pickle')
         with open(file_dir, 'wb') as handle:
             pickle.dump(results_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
 

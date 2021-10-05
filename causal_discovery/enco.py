@@ -29,7 +29,7 @@ class ENCO(object):
                  betas_theta=(0.9, 0.999),
                  model_iters=1000,
                  graph_iters=100,
-                 batch_size=63,
+                 batch_size=31,
                  GF_num_batches=1,
                  GF_num_graphs=100,
                  lambda_sparse=0.004,

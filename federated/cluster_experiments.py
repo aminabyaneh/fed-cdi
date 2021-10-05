@@ -40,25 +40,74 @@ def parallel_experiments_enco():
 
     # Graph
     graph_type = "full"
-    num_vars = 50
-    access_list = [(100, 100)]
-    int_sample_sizes = [1, 2, 3, 4, 5, 8, 11, 13]
+    num_vars = 40
 
     # Federated
-    num_rounds = 5
-    num_clients = 5
-    obs_data_size = 500000
-    int_data_size = 64 * (int_sample_sizes[experiment_id] * num_vars) * num_clients
-    num_epochs = 2
-    folder_name = f'Graph-{graph_type}-{num_vars}-{obs_data_size}-{int_data_size}'
+    num_rounds = 10
+    num_clients = 10
+    c_num = 1
 
-    Experiments.enco_federated(num_rounds, num_clients, experiment_id,
+    accessible_data = (100, 100)
+    obs_data_sizes = [1000 * num_clients, 2000 * num_clients, 4000 * num_clients,
+                      8000 * num_clients, 12000 * num_clients, 16000 * num_clients,
+                      25000 * num_clients, 32000 * num_clients, 45000 * num_clients,
+                      64000 * num_clients, 82000 * num_clients, 128000 * num_clients]
+
+    int_data_sizes = [32 * (p * num_vars) * num_clients for p in range(1, 12 + 1)]
+
+    num_epochs = 2
+    folder_name = f'Graph{c_num}-{graph_type}-{num_vars}' if c_num == num_clients else f'Graph{c_num}-{graph_type}-{num_vars}-all'
+
+    Experiments.enco_federated(num_rounds, c_num, experiment_id,
                                folder_name,
-                               access_list[0], obs_data_size,
-                               int_data_size, num_epochs, num_vars, graph_type)
+                               accessible_data, obs_data_sizes[experiment_id],
+                               int_data_sizes[experiment_id], num_epochs, num_vars, graph_type)
+
+    logger.info(f'Ending the experiment sequence for process {process}\n')
+
+def parallel_experiments_enco_rnd():
+    """ A method to handle parallel MPI cluster experiments.
+    """
+    process = int(str(sys.argv[1]))
+    logger.info(f'Starting the experiment sequence for process {process}\n')
+
+    """ Configurations """
+
+    # Id
+    experiment_id = 8 # WARNING process
+    repeat_count = 10
+
+    # Graph
+    graph_type = "random"
+    num_vars = 50
+    edge_probs = [0.02, 0.05, 0.1, 0.15, 0.2, 0.3]
+
+    # Federated
+    num_rounds = 10
+    num_clients = 10
+    c_num = 10
+
+    accessible_data = (100, 100)
+    obs_data_sizes = [1000 * num_clients, 2000 * num_clients, 4000 * num_clients,
+                      8000 * num_clients, 12000 * num_clients, 16000 * num_clients,
+                      25000 * num_clients, 32000 * num_clients, 45000 * num_clients,
+                      64000 * num_clients, 82000 * num_clients, 128000 * num_clients]
+
+    int_data_sizes = [32 * (p * num_vars) * num_clients for p in range(1, 12 + 1)]
+
+    num_epochs = 2
+
+    for edge_prob in edge_probs:
+        folder_name = f'Graph{c_num}-{graph_type}{edge_prob}-{num_vars}' if c_num == num_clients else f'Graph{c_num}x-{graph_type}{edge_prob}-{num_vars}'
+        for repeat_id in range(repeat_count):
+            Experiments.enco_federated(num_rounds, c_num, experiment_id, repeat_id,
+                                    folder_name,
+                                    accessible_data, obs_data_sizes[experiment_id],
+                                    int_data_sizes[experiment_id], num_epochs, num_vars,
+                                    graph_type, edge_prob=edge_prob)
 
     logger.info(f'Ending the experiment sequence for process {process}\n')
 
 
 if __name__ == '__main__':
-    parallel_experiments_enco()
+    parallel_experiments_enco_rnd()

@@ -142,6 +142,7 @@ causal_graphs/exported_graphs.zip
 # Images
 *.png
 .gitignore
+*.pdf
 
 # Logs
 federated/logs

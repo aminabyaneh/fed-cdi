@@ -294,7 +294,7 @@ class ENCOAlg(InferenceAlgorithm):
     def __init__(self, client_id: int, accessible_percentage: int = 100,
                  obs_data_size: int = 30000, int_data_size: int = 2000,
                  num_vars: int = 20, num_clients: int = 5, graph_type: str = "full",
-                 seed: int = 0, num_categs: int = 10,
+                 seed: int = 0, num_categs: int = 10, edge_prob: float or None = None,
                  external_dataset_dag: CausalDAGDataset or None = None):
         """
         Initialize a ENCO Algorithm class.
@@ -326,12 +326,13 @@ class ENCOAlg(InferenceAlgorithm):
         else:
             logger.info(f'Client {self._client_id} building global dataset')
             self.ـbuild_global_dataset(obs_data_size, int_data_size, num_vars,
-                                       graph_type, seed, num_categs)
+                                       graph_type, seed, num_categs, edge_prob=edge_prob)
 
             self._build_local_dataset(num_clients, len(self._graph.variables))
 
     def ـbuild_global_dataset(self, obs_data_size: int, int_data_size: int, num_vars: int,
-                              graph_type: str, seed: int = 0, num_categs: int = 10):
+                              graph_type: str, seed: int = 0, num_categs: int = 10,
+                              edge_prob: float or None = None):
         """
         The function builds a graph and an external dataset using soft intervention and
         online sampling from the respective graph.
@@ -342,6 +343,7 @@ class ENCOAlg(InferenceAlgorithm):
                                                  max_categs=num_categs,
                                                  use_nn=True,
                                                  graph_func=get_graph_func(graph_type),
+                                                 edge_prob=edge_prob,
                                                  seed=seed)
         logger.info(f'Client {self._client_id}: Graph is built with the provided information: \n {self._graph}')
 
@@ -400,7 +402,9 @@ class ENCOAlg(InferenceAlgorithm):
 
         data_length = (self._data.shape[0] // num_clients)
         start_index = data_length * (self._client_id)
-        end_index = start_index + data_length - 1
+
+        data_length_acc = int(data_length * (self._accessible_p / 100))
+        end_index = start_index + data_length_acc - 1
 
         local_obs_data = self._data[start_index: end_index]
         logger.info(f'Client {self._client_id}: Shape of the local observational data: {local_obs_data.shape}')
@@ -410,10 +414,10 @@ class ENCOAlg(InferenceAlgorithm):
         for var_idx in range(num_vars):
 
             data_length = (self._data_int.shape[1] // num_clients)
-            data_length = int(data_length * (self._accessible_p / 100))
-
             start_index = data_length * (self._client_id)
-            end_index = start_index + data_length - 1
+
+            data_length_acc = int(data_length * (self._accessible_p / 100))
+            end_index = start_index + data_length_acc - 1
 
             int_sample = self._data_int[var_idx][start_index: end_index]
 
