@@ -45,13 +45,13 @@ def parallel_experiments_enco():
     # Federated
     num_rounds = 10
     num_clients = 10
-    c_num = 1
+    c_num = 10
 
     accessible_data = (100, 100)
-    obs_data_sizes = [1000 * num_clients, 2000 * num_clients, 4000 * num_clients,
-                      8000 * num_clients, 12000 * num_clients, 16000 * num_clients,
-                      25000 * num_clients, 32000 * num_clients, 45000 * num_clients,
-                      64000 * num_clients, 82000 * num_clients, 128000 * num_clients]
+    obs_data_sizes = [500 * num_clients, 1000 * num_clients, 1500 * num_clients, 
+                      2000 * num_clients, 2500 * num_clients, 3000 * num_clients,
+                      3500 * num_clients, 4000 * num_clients, 5000 * num_clients,
+                      6000 * num_clients, 7000 * num_clients, 8000 * num_clients]
 
     int_data_sizes = [32 * (p * num_vars) * num_clients for p in range(1, 12 + 1)]
 
@@ -74,24 +74,24 @@ def parallel_experiments_enco_rnd():
     """ Configurations """
 
     # Id
-    experiment_id = 8 # WARNING process
-    repeat_count = 10
+    experiment_id = process
+    repeat_count = 5
 
     # Graph
     graph_type = "random"
     num_vars = 50
-    edge_probs = [0.02, 0.05, 0.1, 0.15, 0.2, 0.3]
+    edge_probs = [0.01, 0.02, 0.04, 0.8, 0.16, 0.32, 0.64]
 
     # Federated
     num_rounds = 10
     num_clients = 10
-    c_num = 10
+    c_num = 1
 
     accessible_data = (100, 100)
-    obs_data_sizes = [1000 * num_clients, 2000 * num_clients, 4000 * num_clients,
-                      8000 * num_clients, 12000 * num_clients, 16000 * num_clients,
-                      25000 * num_clients, 32000 * num_clients, 45000 * num_clients,
-                      64000 * num_clients, 82000 * num_clients, 128000 * num_clients]
+    obs_data_sizes = [500 * num_clients, 1000 * num_clients, 1500 * num_clients, 
+                      2000 * num_clients, 2500 * num_clients, 3000 * num_clients,
+                      3500 * num_clients, 4000 * num_clients, 5000 * num_clients,
+                      6000 * num_clients, 7000 * num_clients, 8000 * num_clients]
 
     int_data_sizes = [32 * (p * num_vars) * num_clients for p in range(1, 12 + 1)]
 
@@ -101,10 +101,10 @@ def parallel_experiments_enco_rnd():
         folder_name = f'Graph{c_num}-{graph_type}{edge_prob}-{num_vars}' if c_num == num_clients else f'Graph{c_num}x-{graph_type}{edge_prob}-{num_vars}'
         for repeat_id in range(repeat_count):
             Experiments.enco_federated(num_rounds, c_num, experiment_id, repeat_id,
-                                    folder_name,
-                                    accessible_data, obs_data_sizes[experiment_id],
-                                    int_data_sizes[experiment_id], num_epochs, num_vars,
-                                    graph_type, edge_prob=edge_prob)
+                                       folder_name,
+                                       accessible_data, obs_data_sizes[experiment_id],
+                                       int_data_sizes[experiment_id], num_epochs, num_vars,
+                                       graph_type, edge_prob=edge_prob)
 
     logger.info(f'Ending the experiment sequence for process {process}\n')
 
