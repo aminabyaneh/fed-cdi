@@ -105,6 +105,7 @@ class Experiments:
 
         results_dict = {client.get_client_id(): list() for client in clients}
         results_dict['priors'] = list()
+        results_dict['matrices'] = list()
 
         for round_id in range(num_rounds):
             logger.info(f'Initiating round {round_id}')
@@ -118,7 +119,8 @@ class Experiments:
             accumulated_gamma_mat: np.ndarray = None
             accumulated_theta_mat: np.ndarray = None
             weights: int = 0
-
+            
+            clients_adjs = list()
             for client in clients:
                 results_dict[client.get_client_id()].append(client.metrics_dict)
 
@@ -129,6 +131,9 @@ class Experiments:
                 weighted_theta_mat = client.inferred_orientation_mat * client.get_accessible_percentage()
                 accumulated_theta_mat = weighted_theta_mat if accumulated_theta_mat is None \
                                                            else (accumulated_theta_mat + weighted_theta_mat)
+                
+                client_adj = (client.inferred_adjacency_mat > 0.0) * (client.inferred_orientation_mat > 0.0)
+                clients_adjs.append((client_adj == 1).astype(int))
 
                 weights += client.get_accessible_percentage()
 
@@ -139,8 +144,10 @@ class Experiments:
             logger.info(f'\nMatrix Gamma = \n{accumulated_gamma_mat}'
                         f'\nMatrix Theta = \n{accumulated_theta_mat}')
 
-            adj = (prior_gamma > 0.0) * (prior_theta > 0.0)
-            adj = (adj == 1)
+            round_adj = (prior_gamma > 0.0) * (prior_theta > 0.0)
+            
+            clients_adjs.append((round_adj == 1).astype(int))
+            results_dict['matrices'].append(clients_adjs)
 
             if round_id != 0:
                 results_dict['priors'].append(clients[0].prior_metrics_dict)
@@ -150,7 +157,7 @@ class Experiments:
                                                  round_id, experiment_id)
                 results_dict['priors'].append(clients[0].prior_metrics_dict)
 
-            logger.info(f'End of the round results: \n {clients[0].prior_metrics_dict} \n {adj}')
+            logger.info(f'End of the round results: \n {clients[0].prior_metrics_dict} \n {clients_adjs[-1]}')
 
         # Save the results dictionary
         save_dir = os.path.join(os.pardir, 'data', folder_name)
