@@ -23,21 +23,18 @@
 # limitations under the License.
 # ========================================================================
 
-import logging
 import os
 import pickle
 import numpy as np
 import torch
 
 from typing import List, Tuple
-from torch.cuda import device_count
 
 from causal_learning import ENCOAlg
 from distributed_network import Network
 from logging_settings import logger
 
-from utils import generate_accessible_percentages
-
+INT_WEIGHT = 10
 
 class Experiments:
     """
@@ -72,32 +69,36 @@ class Experiments:
         logger.info('\n EXPERIMENT CONCLUDED: Network Send/Recv\n')
 
     @staticmethod
-    def enco_federated(num_rounds: int = 5, num_clients: int = 5, experiment_id: int = 0, repeat_id: int = 0,
-                       folder_name: str = 'tests', accessible_data_range: Tuple = (40, 60),
-                       obs_data_size: int = 100000, int_data_size: int = 20000, num_epochs: int = 2,
-                       num_vars = 20, graph_type: str = "full", edge_prob: float or None = None):
+    def enco_federated_int(interventions: List[List[int]], num_rounds: int = 5,
+                           num_clients: int = 2, experiment_id: int = 0,
+                           repeat_id: int = 0, folder_name: str = 'int_asym_test',
+                           accessible_data_range: Tuple = (100, 100),
+                           obs_data_size: int = 100000, int_data_size: int = 20000,
+                           num_epochs: int = 2,
+                           num_vars = 50, graph_type: str = "chain",
+                           edge_prob: float or None = None):
 
-        logger.info(f'EXPERIMENT {experiment_id} STARTED: ENCO Federated\n')
-        logger.info(f'Found {device_count()} GPU devices')
+        logger.info(f'EXPERIMENT {experiment_id} STARTED: ENCO Federated {interventions} \n')
 
-        accessible_percentages_dict = generate_accessible_percentages(num_clients,
-                                                                      accessible_data_range[0],
-                                                                      accessible_data_range[1])
         # Dataset initialization
         clients: List[ENCOAlg] = list()
         for client_id in range(num_clients):
             if client_id == 0:
                 # Generate a global dataset from scratch
-                enco_module = ENCOAlg(client_id, accessible_percentages_dict[client_id],
+                enco_module = ENCOAlg(client_id, 100,
                                       obs_data_size, int_data_size,
-                                      num_vars, num_clients, graph_type, edge_prob=edge_prob)
+                                      num_vars, num_clients, graph_type,
+                                      int_variables=interventions[client_id],
+                                      edge_prob=edge_prob)
                 clients.append(enco_module)
             else:
                 # Load a pre-existing global dataset
                 enco_module = ENCOAlg(client_id=client_id,
-                                      accessible_percentage=accessible_percentages_dict[client_id],
+                                      accessible_percentage=100,
                                       num_clients=num_clients,
-                                      external_dataset_dag=clients[0].global_dataset_dag, edge_prob=edge_prob)
+                                      external_dataset_dag=clients[0].global_dataset_dag,
+                                      int_variables=interventions[client_id],
+                                      edge_prob=edge_prob)
                 clients.append(enco_module)
 
         prior_gamma: np.ndarray = None
@@ -118,11 +119,14 @@ class Experiments:
             # Aggregation stage gamma and theta
             accumulated_gamma_mat: np.ndarray = None
             accumulated_theta_mat: np.ndarray = None
-            weights: int = 0
-            
+            weights: np.ndarray = np.zeros(shape=(num_vars, 1))
+
             clients_adjs = list()
             for client in clients:
                 results_dict[client.get_client_id()].append(client.metrics_dict)
+
+                client_weight = np.ones(num_vars)
+                client_weight[client.get_interventions_list()] = INT_WEIGHT
 
                 weighted_gamma_mat = client.inferred_adjacency_mat * client.get_accessible_percentage()
                 accumulated_gamma_mat = weighted_gamma_mat if accumulated_gamma_mat is None \
@@ -131,7 +135,7 @@ class Experiments:
                 weighted_theta_mat = client.inferred_orientation_mat * client.get_accessible_percentage()
                 accumulated_theta_mat = weighted_theta_mat if accumulated_theta_mat is None \
                                                            else (accumulated_theta_mat + weighted_theta_mat)
-                
+
                 client_adj = (client.inferred_adjacency_mat > 0.0) * (client.inferred_orientation_mat > 0.0)
                 clients_adjs.append((client_adj == 1).astype(int))
 
@@ -145,7 +149,7 @@ class Experiments:
                         f'\nMatrix Theta = \n{accumulated_theta_mat}')
 
             round_adj = (prior_gamma > 0.0) * (prior_theta > 0.0)
-            
+
             clients_adjs.append((round_adj == 1).astype(int))
             results_dict['matrices'].append(clients_adjs)
 
@@ -172,5 +176,12 @@ class Experiments:
 
 
 if __name__ == '__main__':
+    interventions = [[[c for c in range(50)], [c for c in range(50)]],
+                     [[c for c in range(25)], [c for c in range(25)]],
+                     [[c for c in range(25)], [c for c in range(25, 50)]]]
 
-    Experiments.enco_federated()
+    Experiments.enco_federated_int(interventions[0], experiment_id=0, folder_name='test_asym_int')
+    Experiments.enco_federated_int(interventions[1], experiment_id=1, folder_name='test_asym_int')
+    Experiments.enco_federated_int(interventions[2], experiment_id=2, folder_name='test_asym_int')
+
+

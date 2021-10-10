@@ -295,7 +295,8 @@ class ENCOAlg(InferenceAlgorithm):
                  obs_data_size: int = 30000, int_data_size: int = 2000,
                  num_vars: int = 20, num_clients: int = 5, graph_type: str = "full",
                  seed: int = 0, num_categs: int = 10, edge_prob: float or None = None,
-                 external_dataset_dag: CausalDAGDataset or None = None):
+                 external_dataset_dag: CausalDAGDataset or None = None,
+                 int_variables: List[int] or None = None):
         """
         Initialize a ENCO Algorithm class.
 
@@ -313,6 +314,7 @@ class ENCOAlg(InferenceAlgorithm):
         # Initialize federated properties
         self._client_id = client_id
         self._accessible_p = accessible_percentage
+        self._int_variables = int_variables
 
         # Initialize the global dataset
         if external_dataset_dag is not None:
@@ -430,7 +432,8 @@ class ENCOAlg(InferenceAlgorithm):
 
         self._local_dag_dataset = CausalDAGDataset(self.original_adjacency_mat,
                                                    local_obs_data,
-                                                   local_int_data)
+                                                   local_int_data,
+                                                   int_vars=self._int_variables)
 
     def infer_causal_structure(self, gamma_belief: str or None = None,
                                theta_belief: str or None = None, num_epochs: int = 10,
@@ -474,3 +477,10 @@ class ENCOAlg(InferenceAlgorithm):
         """
         return self._accessible_p
 
+    def get_interventions_list(self):
+        """Getter for enforced interventions.
+
+        Returns:
+            List[int]: variable ids
+        """
+        return self._int_variables

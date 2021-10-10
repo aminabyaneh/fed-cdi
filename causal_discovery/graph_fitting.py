@@ -248,6 +248,15 @@ class GraphFitting(object):
             self.inter_vars = [i for i in range(len(self.graph.variables))]
             random.shuffle(self.inter_vars)
         var_idx = self.inter_vars.pop()
+
+        if self.graph.int_variables is not None:
+            while var_idx not in self.graph.int_variables:
+                if len(self.inter_vars) == 0:
+                    self.inter_vars = [i for i in range(len(self.graph.variables))]
+                    random.shuffle(self.inter_vars)
+
+                var_idx = self.inter_vars.pop()
+
         return var_idx
 
     def sample_intervention(self, graph, dataset_size, var_idx=-1):

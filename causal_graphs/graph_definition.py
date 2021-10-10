@@ -1,9 +1,9 @@
 """
-Wrapper classes for causal graphs. A causal graph is defined 
-by a set of "CausalVariable" objects, each having a name and 
+Wrapper classes for causal graphs. A causal graph is defined
+by a set of "CausalVariable" objects, each having a name and
 conditional probability distribution. Additionally, we have
 an explicit representation of the adjacency matrix for easier
-handling. 
+handling.
 """
 import torch
 import numpy as np
@@ -66,7 +66,7 @@ class CausalDAG(object):
 
     def __init__(self, variables, edges=None, adj_matrix=None, latents=None):
         """
-        Main class for summarizing all functionalities and parameters of a causal graph. Each 
+        Main class for summarizing all functionalities and parameters of a causal graph. Each
         causal graph consists of a set of variables and a graph structure description.
 
         Parameters
@@ -115,11 +115,11 @@ class CausalDAG(object):
                         Dictionary for specifing interventions that should be considered when sampling.
                         The keys should be variable names on which we intervene, and values can be
                         distributions in case of imperfect interventions, and values like a numpy array
-                        otherwise. 
+                        otherwise.
         batch_size : int
                      Number of samples to return.
         as_array : bool
-                   If True, the samples are returned in one, stacked numpy array of 
+                   If True, the samples are returned in one, stacked numpy array of
                    shape [batch_size, num_vars]. Otherwise, the values are returned as dictionary of
                    variable_name -> samples.
         """
@@ -158,7 +158,7 @@ class CausalDAG(object):
         ----------
         interventions : dict
                         Dictionary of variable_name -> intervention distribution/value. The distributions of
-                        the variables in this dict will be replaced by the distribution in the dict, if 
+                        the variables in this dict will be replaced by the distribution in the dict, if
                         interventions[variable_name] is a ProbDist object. Otherwise, it is assumed to be
                         a constant value and is assigned a ConstantDist object.
         """
@@ -229,7 +229,7 @@ class CausalDAG(object):
 
 class CausalDAGDataset(CausalDAG):
 
-    def __init__(self, adj_matrix, data_obs, data_int, latents=None):
+    def __init__(self, adj_matrix, data_obs, data_int, int_vars=None, latents=None):
         """
         A CausalDAG but with existing pre-sampled data and unknown conditional distributions.
         """
@@ -239,6 +239,7 @@ class CausalDAGDataset(CausalDAG):
         super().__init__(variables=variables, adj_matrix=adj_matrix, latents=latents)
         self.data_obs = data_obs  # Observational dataset, shape [num_samples, num_vars]
         self.data_int = data_int  # Interventional dataset, shape [num_vars, num_samples, num_vars]. First dim is the intervened variable.
+        self.int_variables = int_vars
 
     def sample(self, *args, **kwargs):
         raise Exception('You cannot generate new examples from a Causal-DAG dataset. '
