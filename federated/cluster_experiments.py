@@ -129,7 +129,7 @@ def parallel_experiments_enco_str():
     # Federated
     num_rounds = 10
     num_clients = 10
-    c_num = 10
+    c_num = 1
 
     accessible_data = (100, 100)
     obs_data_sizes = [500 * num_clients, 1000 * num_clients, 1500 * num_clients,
