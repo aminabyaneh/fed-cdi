@@ -28,6 +28,7 @@ import os.path
 import random
 
 from typing import List, Dict, Tuple
+from scipy.stats import entropy
 
 import numpy as np
 import pandas as pd
@@ -219,6 +220,23 @@ def resume_dsdi_experiments(basename: str = 'experiment_') -> int:
         start_from = max(existing_experiments_ids)
 
     return start_from
+
+
+def calculate_edge_entropy(adj_mats: List[np.ndarray]):
+    """ Calculate the entropy over edges for the graphs after a federated round.
+
+    Args:
+        adj_mats (List[np.ndarray]): A list of adjacency matrices for entropy
+        calculations.
+
+    Returns:
+        np.ndarray: Entropy per each edge as a matrice.
+    """
+
+    prob_true_mat = np.sum(adj_mats, axis=0) / len(adj_mats)
+    mat_entropy = lambda x: entropy([x, 1 - x], base=2)
+
+    return np.vectorize(mat_entropy)(prob_true_mat)
 
 
 def generate_npy_prior_matrix(matrix: np.ndarray = None,

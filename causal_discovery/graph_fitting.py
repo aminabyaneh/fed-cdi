@@ -55,7 +55,7 @@ class GraphFitting(object):
         self.inter_vars = []
         if self.graph.num_vars >= 100 or hasattr(self.graph, "data_int"):
             self.dataset = InterventionalDataset(self.graph,
-                                                 dataset_size=50,
+                                                 dataset_size=4096,
                                                  batch_size=self.batch_size)
 
     def perform_update_step(self, gamma, theta, var_idx=-1, only_theta=False):
