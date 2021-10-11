@@ -24,6 +24,9 @@
 # ========================================================================
 
 import sys
+
+import numpy as np
+
 from experiments import Experiments
 from logging_settings import logger
 
@@ -43,22 +46,24 @@ def parallel_experiments_enco_int():
     graph_types = ["full", "chain", "jungle", "collider"]
     num_vars = 50
 
-    interventions = [[[c for c in range(50)], [c for c in range(50)]],
-                     [[c for c in range(25)], [c for c in range(25)]],
-                     [[c for c in range(25)], [c for c in range(25, 50)]],
-                     [[c for c in range(25)], [c for c in range(25)]],
-                     [[c for c in range(12)], [c for c in range(12, 50)]],
-                     [[c for c in range(5)], [c for c in range(5, 50)]]]
+    vars_list = [var_idx for var_idx in range(num_vars)]
 
+    interventions = [[spl.tolist() for spl in np.array_split(vars_list, 5)],
+                     [spl.tolist() for spl in np.array_split(vars_list, 10)],
+                     [spl.tolist() for spl in np.split(vars_list, [5, 10, 30, 40])],
+                     [spl.tolist() for spl in np.split(vars_list, [5, 10, 15, 20, 25, 30, 35, 40, 45])],
+                     [spl.tolist() for spl in np.split(vars_list, [2, 4, 20, 40])],
+                     [spl.tolist() for spl in np.split(vars_list, [2, 4, 6, 8, 10, 15, 20, 30, 40])],
+                     [[c for c in range(50)]]]
     # Federated
     num_rounds = 10
-    num_clients = 2
+    num_clients = [5, 10, 5, 10, 5, 10, 1]
 
     accessible_data = (100, 100)
-    obs_data_size = 20000 * num_clients
+    obs_data_size = 20000 * num_clients[experiment_id]
 
     p = 2
-    int_data_size = 32 * (p * num_vars) * num_clients
+    int_data_size = 32 * (p * num_vars) * num_clients[experiment_id]
 
     num_epochs = 2
     repeat = 5
@@ -67,7 +72,7 @@ def parallel_experiments_enco_int():
         folder_name = f'GraphAsym{num_clients}-{graph_type}-{num_vars}'
 
         for r in range(repeat):
-            Experiments.enco_federated_int(interventions[experiment_id], num_rounds, num_clients, experiment_id, r,
+            Experiments.enco_federated_int(interventions[experiment_id], num_rounds, num_clients[experiment_id], experiment_id, r,
                                            folder_name, accessible_data, obs_data_size,
                                            int_data_size, num_epochs, num_vars, graph_type)
 
