@@ -43,7 +43,7 @@ def parallel_experiments_enco_int():
     experiment_id = process
 
     # Graph
-    graph_types = ["full", "chain", "jungle", "collider"]
+    graph_types = ["jungle"] #["full", "chain", "jungle", "collider"]
     num_vars = 50
 
     vars_list = [var_idx for var_idx in range(num_vars)]
@@ -54,22 +54,23 @@ def parallel_experiments_enco_int():
                      [spl.tolist() for spl in np.split(vars_list, [5, 10, 15, 20, 25, 30, 35, 40, 45])],
                      [spl.tolist() for spl in np.split(vars_list, [2, 4, 20, 40])],
                      [spl.tolist() for spl in np.split(vars_list, [2, 4, 6, 8, 10, 15, 20, 30, 40])],
-                     [[c for c in range(50)]]]
+                     [[c for c in range(50)]],
+                     [[c for c in range(25)]]]
     # Federated
     num_rounds = 10
-    num_clients = [5, 10, 5, 10, 5, 10, 1]
+    num_clients = [5, 10, 5, 10, 5, 10, 1, 1]
 
     accessible_data = (100, 100)
-    obs_data_size = 20000 * num_clients[experiment_id]
+    obs_data_size = 1000 * num_clients[experiment_id]
 
-    p = 2
+    p = 1
     int_data_size = 32 * (p * num_vars) * num_clients[experiment_id]
 
     num_epochs = 2
     repeat = 5
 
     for graph_type in graph_types:
-        folder_name = f'GraphAsym{num_clients}-{graph_type}-{num_vars}'
+        folder_name = f'GraphAsym-{graph_type}-{num_vars}'
 
         for r in range(repeat):
             Experiments.enco_federated_int(interventions[experiment_id], num_rounds, num_clients[experiment_id], experiment_id, r,
@@ -77,6 +78,57 @@ def parallel_experiments_enco_int():
                                            int_data_size, num_epochs, num_vars, graph_type)
 
         logger.info(f'Ending the experiment sequence for process {process}\n')
+
+
+
+def parallel_experiments_enco_int_rnd():
+    """ A method to handle parallel MPI cluster experiments.
+    """
+    process = int(str(sys.argv[1]))
+
+    """ Configurations """
+    # Id
+    experiment_id = process
+    if experiment_id not in [4, 6]:
+        return
+
+    # Graph
+    edge_probs = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.8, 0.9]
+    num_vars = 50
+
+    vars_list = [var_idx for var_idx in range(num_vars)]
+
+    interventions = [[spl.tolist() for spl in np.array_split(vars_list, 5)],
+                     [spl.tolist() for spl in np.array_split(vars_list, 10)],
+                     [spl.tolist() for spl in np.split(vars_list, [5, 10, 30, 40])],
+                     [spl.tolist() for spl in np.split(vars_list, [5, 10, 15, 20, 25, 30, 35, 40, 45])],
+                     [spl.tolist() for spl in np.split(vars_list, [2, 4, 20, 40])],
+                     [spl.tolist() for spl in np.split(vars_list, [2, 4, 6, 8, 10, 15, 20, 30, 40])],
+                     [[c for c in range(50)]],
+                     [[c for c in range(25)]]]
+    # Federated
+    num_rounds = 10
+    num_clients = [5, 10, 5, 10, 5, 10, 1, 1]
+
+    accessible_data = (100, 100)
+    obs_data_size = 5000 * num_clients[experiment_id]
+
+    p = 2
+    int_data_size = 32 * (p * num_vars) * num_clients[experiment_id]
+
+    num_epochs = 2
+    repeat = 5
+
+    for edge_prob in edge_probs:
+        logger.info(f'Starting the experiment sequence for edge {edge_prob}\n')
+        folder_name = f'GraphAsym-{edge_prob}-{num_vars}'
+
+        for r in range(repeat):
+            Experiments.enco_federated_int(interventions[experiment_id], num_rounds, num_clients[experiment_id], experiment_id, r,
+                                           folder_name, accessible_data, obs_data_size,
+                                           int_data_size, num_epochs, num_vars, graph_type="random", edge_prob=edge_prob)
+
+    logger.info(f'Ending the experiment sequence for process {process}\n')
 
 if __name__ == '__main__':
     parallel_experiments_enco_int()
