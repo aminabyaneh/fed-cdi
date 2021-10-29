@@ -327,6 +327,7 @@ class ENCO(object):
         TN = TN - self.gamma.shape[-1]  # Remove diagonal as those are not being predicted
         recall = TP / max(TP + FN, 1e-5)
         precision = TP / max(TP + FP, 1e-5)
+
         # Structural Hamming Distance score
         rev = torch.logical_and(binary_gamma, self.true_adj_matrix.T)
         num_revs = rev.float().sum().item()

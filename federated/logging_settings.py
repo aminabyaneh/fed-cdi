@@ -17,8 +17,8 @@
 import logging
 import sys
 
-# Set the log level here
-logging_level = logging.INFO
+# Set the defult log level here
+logging_level = logging.DEBUG
 
 # Change the logging format here
 logging.basicConfig(format='%(levelname)s - %(filename)s - %(lineno)d - %(funcName)s - %(asctime)s - %(message)s',

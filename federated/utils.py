@@ -28,13 +28,88 @@ import os.path
 import random
 
 from typing import List, Dict, Tuple
+from networkx.algorithms.shortest_paths.generic import shortest_path
 
 import numpy as np
 import pandas as pd
+import networkx as nx
 
 from logging_settings import logger
 
 DEFAULT_OBSERVATION_SIZE = 5000
+
+
+def find_shortest_distance_dict(variable_index, adjacency_mat) -> Dict:
+    """ Get a dict with elements that indicate the shortest distance between
+    each variable and the one determined by index.
+
+    Args:
+        variable_index (int): Reference variable for distance measuring.
+        adjacency_mat (np.ndarray): Graph adjacency matrix.
+
+    Returns:
+        Dict: The distance dictionary.
+    """
+
+    graph = nx.DiGraph(adjacency_mat)
+    distance_dict: Dict[int, int] = dict()
+
+    shortest_path_result = nx.shortest_path(graph, variable_index)
+
+    for var_idx in range(adjacency_mat.shape[0]):
+        if var_idx in shortest_path_result.keys():
+            distance_dict[var_idx] = len(shortest_path_result[var_idx]) - 1
+        else:
+            distance_dict[var_idx] = np.inf
+
+    return distance_dict
+
+
+
+def calculate_metrics(predicted_mat: np.ndarray, ground_truth: np.ndarray) -> Dict:
+    """Returns a dictionary with detailed metrics comparing the current prediction to
+    the ground truth graph.
+
+    Note: calculations are the same as ENCO module.
+
+    Args:
+        predicted_mat (np.ndarray): The predicted adjacency matrix.
+        ground_truth (np.ndarray): The true structure of underlying causality graph.
+
+    Returns:
+        Dict: Metrics dictionary.
+    """
+    # Standard metrics (TP,TN,FP,FN) for edge prediction
+    false_positives = np.logical_and(predicted_mat, np.logical_not(ground_truth))
+    false_negatives = np.logical_and(np.logical_not(predicted_mat), ground_truth)
+
+    TP = np.logical_and(predicted_mat, ground_truth).astype(float).sum()
+    TN = np.logical_and(np.logical_not(predicted_mat), np.logical_not(ground_truth)).astype(float).sum()
+    FP = false_positives.astype(float).sum()
+    FN = false_negatives.astype(float).sum()
+    TN = TN - predicted_mat.shape[-1]
+
+    recall = TP / max(TP + FN, 1e-5)
+    precision = TP / max(TP + FP, 1e-5)
+
+    # Structural Hamming Distance score
+    rev = np.logical_and(predicted_mat, ground_truth.T)
+    num_revs = rev.astype(float).sum()
+    SHD = (false_positives + false_negatives + rev + rev.T).astype(float).sum() - num_revs
+
+    # Summarizing all results in single dictionary
+    metrics = {
+        "TP": int(TP),
+        "TN": int(TN),
+        "FP": int(FP),
+        "FN": int(FN),
+        "SHD": int(SHD),
+        "reverse": int(num_revs),
+        "recall": recall,
+        "precision": precision,
+    }
+
+    return metrics
 
 
 def build_experimental_dataset(adjacency_matrix: np.ndarray, causal_order: List,
@@ -59,10 +134,8 @@ def build_experimental_dataset(adjacency_matrix: np.ndarray, causal_order: List,
         verbose (bool): Show details about dataset after build or not. Defaults to False.
     """
 
-    # Create an array to store generated data
     data = np.zeros((len(causal_order), observation_size))
 
-    # Determine the noise distribution
     n_dist = None
     if noise_distribution == 'uniform':
         n_dist = np.random.uniform
@@ -70,8 +143,6 @@ def build_experimental_dataset(adjacency_matrix: np.ndarray, causal_order: List,
         n_dist = np.random.gaussian
 
     for variable_index in causal_order:
-
-        # Additive noise based on noise distribution
         if n_dist is not None:
             data[variable_index] += n_dist(size=observation_size)
 
@@ -82,20 +153,14 @@ def build_experimental_dataset(adjacency_matrix: np.ndarray, causal_order: List,
                               index=range(observation_size),
                               columns=['X' + str(i) for i in range(len(causal_order))])
 
-    # Save the data frame as csv file
     data_frame.to_csv(path_or_buf=os.path.join(os.pardir, 'data', file_name + '_dataset.csv'), index=False)
-
-    # Save the adjacency matrix with numpy
     save_data_object(adjacency_matrix, file_name + '_adjacency_matrix', 'data')
-
-    # Save the assignment dictionary
     save_data_object(assignment, file_name + f'_{assignment_type}', 'data')
 
-    # Show details of dataset
     if verbose:
         logger.info(f'Dataset generated: \n Name: {file_name} \t Size: {data_frame.shape} '
                     f'\t Additive Noise: {noise_distribution}\n')
-    # Return  the dataframe
+
     return data_frame
 
 
