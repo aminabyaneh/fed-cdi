@@ -39,6 +39,32 @@ from logging_settings import logger
 DEFAULT_OBSERVATION_SIZE = 5000
 
 
+def split_variables_set(num_vars, accessible_percentages, seed=0):
+    """Split a set of variables based on accessible percentages.
+
+    Args:
+        num_vars (int): Total number of variables.
+        accessible_percentages (List[int]): Accessible percentage for each client.
+        seed (int, optional): Random seed for shuffling. Defaults to 0.
+
+    Returns:
+        List: A list of splits.
+    """
+    variables = [var for var in range(num_vars)]
+
+    random.seed(seed)
+    random.shuffle(variables)
+
+    indices = list()
+    start, end = 0, 0
+    for per in accessible_percentages:
+        start = end
+        end = start + int((per / 100) * num_vars)
+        indices.append(variables[start: end])
+
+    return indices
+
+
 def find_shortest_distance_dict(variable_index, adjacency_mat) -> Dict:
     """ Get a dict with elements that indicate the shortest distance between
     each variable and the one determined by index.
@@ -65,12 +91,11 @@ def find_shortest_distance_dict(variable_index, adjacency_mat) -> Dict:
     return distance_dict
 
 
-
 def calculate_metrics(predicted_mat: np.ndarray, ground_truth: np.ndarray) -> Dict:
     """Returns a dictionary with detailed metrics comparing the current prediction to
     the ground truth graph.
 
-    Note: calculations are the same as ENCO module.
+    Note: calculations are the same as ENCO module but with numpy.
 
     Args:
         predicted_mat (np.ndarray): The predicted adjacency matrix.
@@ -79,7 +104,6 @@ def calculate_metrics(predicted_mat: np.ndarray, ground_truth: np.ndarray) -> Di
     Returns:
         Dict: Metrics dictionary.
     """
-    # Standard metrics (TP,TN,FP,FN) for edge prediction
     false_positives = np.logical_and(predicted_mat, np.logical_not(ground_truth))
     false_negatives = np.logical_and(np.logical_not(predicted_mat), ground_truth)
 
@@ -92,12 +116,10 @@ def calculate_metrics(predicted_mat: np.ndarray, ground_truth: np.ndarray) -> Di
     recall = TP / max(TP + FN, 1e-5)
     precision = TP / max(TP + FP, 1e-5)
 
-    # Structural Hamming Distance score
     rev = np.logical_and(predicted_mat, ground_truth.T)
     num_revs = rev.astype(float).sum()
     SHD = (false_positives + false_negatives + rev + rev.T).astype(float).sum() - num_revs
 
-    # Summarizing all results in single dictionary
     metrics = {
         "TP": int(TP),
         "TN": int(TN),

@@ -24,111 +24,287 @@
 # ========================================================================
 
 import sys
-
 import numpy as np
 
-from experiments import Experiments
+from federated_simulation import FederatedSimulator
 from logging_settings import logger
+from utils import split_variables_set
 
 
-def parallel_experiments_enco_int():
+def parallel_experiments_enco_rnd():
     """ A method to handle parallel MPI cluster experiments.
     """
     process = int(str(sys.argv[1]))
     logger.info(f'Starting the experiment sequence for process {process}\n')
 
-    """ Configurations """
+    # Id
+    experiment_id = process
+    repeat_count = 5
+
+    # Graph
+    graph_type = "random"
+    num_vars = 50
+    edge_probs = [0.01, 0.02, 0.04, 0.8, 0.16, 0.32, 0.64]
+
+    # Federated
+    num_rounds = 10
+    num_clients = 10
+    c_num = 1
+
+    obs_data_sizes = [500 * num_clients, 1000 * num_clients, 1500 * num_clients,
+                      2000 * num_clients, 2500 * num_clients, 3000 * num_clients,
+                      3500 * num_clients, 4000 * num_clients, 5000 * num_clients,
+                      6000 * num_clients, 7000 * num_clients, 8000 * num_clients]
+
+    int_data_sizes = [32 * (p * num_vars) * num_clients for p in range(1, 12 + 1)]
+
+    interventions_dict = {cid: [v for v in range(num_vars)] for cid in range(num_clients)}
+
+    # TODO: Not ready to run, adapt first!
+    for edge_prob in edge_probs:
+        folder_name = f'Graph{c_num}-{graph_type}{edge_prob}-{num_vars}' if c_num == num_clients \
+                      else f'Graph{c_num}x-{graph_type}{edge_prob}-{num_vars}'
+        for seed in range(repeat_count):
+            federated_model = FederatedSimulator(interventions_dict, num_clients=num_clients[experiment_id],
+                                                 num_rounds=num_rounds, experiment_id=experiment_id,
+                                                 repeat_id=seed, output_dir=folder_name)
+            federated_model.initialize_clients_data(num_vars=num_vars, graph_type=graph_type,
+                                                    obs_data_size=obs_data_sizes[experiment_id],
+                                                    int_data_size=int_data_sizes[experiment_id],
+                                                    edge_prob= edge_prob, seed=seed)
+            federated_model.execute_simulation(aggregation_method="naive")
+
+    logger.info(f'Ending the experiment sequence for process {process}\n')
+
+
+def parallel_experiments_enco_str():
+    """ A method to handle parallel MPI cluster experiments.
+    """
+    process = int(str(sys.argv[1]))
+    logger.info(f'Starting the experiment sequence for process {process}\n')
+
+    # Id
+    experiment_id = process
+    repeat_count = 5
+
+    # Federated
+    num_rounds = 10
+    num_clients = [10, 1, 10]
+    c_nums = [10, 1, 1]
+
+    # Graph
+    num_vars = 50
+    graph_types = ['chain', 'jungle', 'full']
+    interventions_dict = {cid: [v for v in range(num_vars)] for cid in range(num_clients)}
+
+    # TODO: Not ready to run, adapt first!
+    for c_num, num_client in zip(c_nums, num_clients):
+        for graph_type in graph_types:
+            obs_data_sizes, int_data_sizes = get_datasets_size_naive(graph_type, num_client, num_vars)
+            folder_name = f'Graph{c_num}-{graph_type}-{num_vars}' if c_num == num_client \
+                          else f'Graph{c_num}x-{graph_type}-{num_vars}'
+
+            logger.info(f'Starting experiments for {c_num} client {num_client} setting')
+            for seed in range(repeat_count):
+                federated_model = FederatedSimulator(interventions_dict, num_clients=num_clients[experiment_id],
+                                                     num_rounds=num_rounds, experiment_id=experiment_id,
+                                                     repeat_id=seed, output_dir=folder_name)
+                federated_model.initialize_clients_data(num_vars=num_vars, graph_type=graph_type,
+                                                        obs_data_size=obs_data_sizes[experiment_id],
+                                                        int_data_size=int_data_sizes[experiment_id], seed=seed)
+                federated_model.execute_simulation(aggregation_method="naive")
+
+    logger.info(f'Ending the experiment sequence for process {process}\n')
+
+
+def parallel_experiments_alpha_search():
+    """ A method to handle parallel MPI cluster experiments.
+    """
+    process = int(str(sys.argv[1]))
+    logger.info(f'Starting the experiment sequence for process {process}\n')
 
     # Id
     experiment_id = process
 
     # Graph
-    graph_types = ["jungle"] #["full", "chain", "jungle", "collider"]
-    num_vars = 50
+    graph_types = ["chain", "jungle", "collider"]
+    interventions_dict = {0: [v for v in range(15)],
+                          1: [v for v in range(15, 30)]}
+    num_vars = 30
 
-    vars_list = [var_idx for var_idx in range(num_vars)]
-
-    interventions = [[spl.tolist() for spl in np.array_split(vars_list, 5)],
-                     [spl.tolist() for spl in np.array_split(vars_list, 10)],
-                     [spl.tolist() for spl in np.split(vars_list, [5, 10, 30, 40])],
-                     [spl.tolist() for spl in np.split(vars_list, [5, 10, 15, 20, 25, 30, 35, 40, 45])],
-                     [spl.tolist() for spl in np.split(vars_list, [2, 4, 20, 40])],
-                     [spl.tolist() for spl in np.split(vars_list, [2, 4, 6, 8, 10, 15, 20, 30, 40])],
-                     [[c for c in range(50)]],
-                     [[c for c in range(25)]]]
     # Federated
     num_rounds = 10
-    num_clients = [5, 10, 5, 10, 5, 10, 1, 1]
-
-    accessible_data = (100, 100)
-    obs_data_size = 1000 * num_clients[experiment_id]
-
-    p = 1
-    int_data_size = 32 * (p * num_vars) * num_clients[experiment_id]
-
-    num_epochs = 2
-    repeat = 5
+    num_clients = [2, 2, 2, 2, 2, 2, 2, 2]
+    alphas = [0, 0.1, 0.2, 0.3, 0.4, 0.6, 0.8, 1]
+    repeat = 0
 
     for graph_type in graph_types:
         folder_name = f'GraphAsym-{graph_type}-{num_vars}'
+        obs_data_size, int_data_size = get_datasets_size_locality(graph_type, num_clients[experiment_id], num_vars)
+        federated_model = FederatedSimulator(interventions_dict, num_clients=num_clients[experiment_id],
+                                             num_rounds=num_rounds, experiment_id=experiment_id,
+                                             repeat_id=repeat, output_dir=folder_name)
 
-        for r in range(repeat):
-            Experiments.enco_federated_int(interventions[experiment_id], num_rounds, num_clients[experiment_id], experiment_id, r,
-                                           folder_name, accessible_data, obs_data_size,
-                                           int_data_size, num_epochs, num_vars, graph_type)
+        federated_model.initialize_clients_data(num_vars=num_vars, graph_type=graph_type, obs_data_size=obs_data_size,
+                                                int_data_size=int_data_size)
+
+        federated_model.execute_simulation(aggregation_method="locality",
+                                           initial_mass=np.array([16, 16]),
+                                           alpha=alphas[experiment_id], beta=0.3, min_mass=1)
 
         logger.info(f'Ending the experiment sequence for process {process}\n')
 
 
-
-def parallel_experiments_enco_int_rnd():
+def parallel_experiments_toy_str():
     """ A method to handle parallel MPI cluster experiments.
     """
     process = int(str(sys.argv[1]))
+    logger.info(f'Starting the experiment sequence for process {process}\n')
 
-    """ Configurations """
     # Id
     experiment_id = process
-    if experiment_id not in [4, 6]:
-        return
+    specifier = "half"
 
     # Graph
-    edge_probs = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.8, 0.9]
-    num_vars = 50
+    graph_types = ["jungle", "collider", "chain", "full", "bidiag"]
+    num_vars = 15
+    accessible_percentages = [50, 50]
 
-    vars_list = [var_idx for var_idx in range(num_vars)]
-
-    interventions = [[spl.tolist() for spl in np.array_split(vars_list, 5)],
-                     [spl.tolist() for spl in np.array_split(vars_list, 10)],
-                     [spl.tolist() for spl in np.split(vars_list, [5, 10, 30, 40])],
-                     [spl.tolist() for spl in np.split(vars_list, [5, 10, 15, 20, 25, 30, 35, 40, 45])],
-                     [spl.tolist() for spl in np.split(vars_list, [2, 4, 20, 40])],
-                     [spl.tolist() for spl in np.split(vars_list, [2, 4, 6, 8, 10, 15, 20, 30, 40])],
-                     [[c for c in range(50)]],
-                     [[c for c in range(25)]]]
     # Federated
     num_rounds = 10
-    num_clients = [5, 10, 5, 10, 5, 10, 1, 1]
+    num_clients = [1, 1, 2]
+    repeat = 10
 
-    accessible_data = (100, 100)
-    obs_data_size = 5000 * num_clients[experiment_id]
+    for graph_type in graph_types:
+        obs_data_size, int_data_size = get_datasets_size_locality(graph_type, num_clients[experiment_id],
+                                                                  num_vars)
+        for seed in range(repeat):
+            folder_name = f'ToySetup-{graph_type}-{num_vars}-{specifier}'
 
-    p = 2
-    int_data_size = 32 * (p * num_vars) * num_clients[experiment_id]
+            splits = split_variables_set(num_vars, accessible_percentages, seed)
+            interventions_dict = [{0: splits[0]}, {0: splits[1]}, # Single client setup
+                                  {0: splits[0], 1: splits[1]}] # Federated collaboration
 
-    num_epochs = 2
-    repeat = 5
+            federated_model = FederatedSimulator(interventions_dict[experiment_id],
+                                                 num_clients=num_clients[experiment_id],
+                                                 num_rounds=num_rounds, experiment_id=experiment_id,
+                                                 repeat_id=seed, output_dir=folder_name)
 
-    for edge_prob in edge_probs:
-        logger.info(f'Starting the experiment sequence for edge {edge_prob}\n')
-        folder_name = f'GraphAsym-{edge_prob}-{num_vars}'
+            federated_model.initialize_clients_data(num_vars=num_vars, graph_type=graph_type,
+                                                    obs_data_size=obs_data_size,
+                                                    int_data_size=int_data_size, seed=seed)
 
-        for r in range(repeat):
-            Experiments.enco_federated_int(interventions[experiment_id], num_rounds, num_clients[experiment_id], experiment_id, r,
-                                           folder_name, accessible_data, obs_data_size,
-                                           int_data_size, num_epochs, num_vars, graph_type="random", edge_prob=edge_prob)
+            federated_model.execute_simulation(aggregation_method="locality",
+                                               initial_mass=np.array([16, 16]),
+                                               alpha=1, beta=0.3, min_mass=1)
 
     logger.info(f'Ending the experiment sequence for process {process}\n')
 
+
+def parallel_experiments_toy_rnd():
+    """ A method to handle parallel MPI cluster experiments.
+    """
+    process = int(str(sys.argv[1]))
+    logger.info(f'Starting the experiment sequence for process {process}\n')
+
+    # Id
+    experiment_id = process
+    specifier = "half"
+    accessible_percentages = [50, 50]
+
+    # Graph
+    graph_type = "random"
+    edge_probs = [0.1, 0.2, 0.4, 0.6, 0.8, 1.0]
+    num_vars = 15
+
+    # Federated
+    num_rounds = 10
+    num_clients = [1, 1, 2]
+    repeat = 10
+
+    for edge_prob in edge_probs:
+        obs_data_size, int_data_size = get_datasets_size_locality(graph_type, num_clients[experiment_id],
+                                                                  num_vars, edge_prob)
+        for seed in range(repeat):
+            folder_name = f'ToySetup-{graph_type}-{num_vars}-{edge_prob}-{specifier}'
+
+            splits = split_variables_set(num_vars, accessible_percentages, seed)
+            interventions_dict = [{0: splits[0]}, {0: splits[1]}, # Single client setup
+                                  {0: splits[0], 1: splits[1]}] # Federated collaboration
+
+            federated_model = FederatedSimulator(interventions_dict[experiment_id],
+                                                 num_clients=num_clients[experiment_id],
+                                                 num_rounds=num_rounds, experiment_id=experiment_id,
+                                                 repeat_id=seed, output_dir=folder_name)
+
+            federated_model.initialize_clients_data(num_vars=num_vars, graph_type=graph_type,
+                                                    obs_data_size=obs_data_size,
+                                                    int_data_size=int_data_size,
+                                                    edge_prob=edge_prob, seed=seed)
+
+            federated_model.execute_simulation(aggregation_method="locality",
+                                               initial_mass=np.array([16, 16]),
+                                               alpha=1, beta=0.3, min_mass=1)
+
+    logger.info(f'Ending the experiment sequence for process {process}\n')
+
+
+def get_datasets_size_locality(graph_type: str, num_clients: int, num_vars: int, edge_prob: float = 0.0):
+
+    """ Chain, Jungle, Collider, and Bidiag graphs sample sizes """
+    if graph_type == 'chain' or graph_type == 'jungle' or graph_type == 'collider' or graph_type == 'bidiag':
+        obs_data_sizes = 5000 * num_clients
+        int_data_sizes = 32 * (2 * num_vars) * num_clients
+
+    """ Full graph sample sizes """
+    if graph_type == 'full':
+        obs_data_sizes = 10000 * num_clients
+        int_data_sizes = 32 * (4 * num_vars) * num_clients
+
+    """ Random graphs sample sizes """
+    if graph_type == 'random':
+        obs_data_sizes = edge_prob * 10000 * num_clients
+        int_data_sizes = 32 * (2 * num_vars) * num_clients
+
+    return obs_data_sizes, int_data_sizes
+
+
+def get_datasets_size_naive(graph_type: str, num_clients: int, num_vars: int):
+    """ Chain graph sample sizes """
+    if graph_type == 'chain':
+        obs_data_sizes = [260 * num_clients, 280 * num_clients, 300 * num_clients,
+                          320 * num_clients, 350 * num_clients, 370 * num_clients,
+                          390 * num_clients, 410 * num_clients, 430 * num_clients,
+                          450 * num_clients, 335 * num_clients, 500 * num_clients,]
+        int_data_sizes = [32 * (p * num_vars) * num_clients for p in [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]]
+
+    """ Jungle graph sample sizes """
+    if graph_type == 'jungle':
+        obs_data_sizes = [450 * num_clients, 550 * num_clients, 600 * num_clients,
+                          650 * num_clients, 700 * num_clients, 750 * num_clients,
+                          800 * num_clients, 850 * num_clients, 900 * num_clients,
+                          950 * num_clients, 1000 * num_clients, 1100 * num_clients,]
+        int_data_sizes = [32 * (p * num_vars) * num_clients for p in [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]]
+
+    """ Collider graph sample sizes """
+    if graph_type == 'collider':
+        obs_data_sizes = [500 * num_clients, 1000 * num_clients, 1500 * num_clients,
+                          2000 * num_clients, 2500 * num_clients, 3000 * num_clients,
+                          3500 * num_clients, 4000 * num_clients, 5000 * num_clients,
+                          6000 * num_clients, 7000 * num_clients, 8000 * num_clients]
+        int_data_sizes = [32 * (p * num_vars) * num_clients for p in range(1, 12 + 1)]
+
+    """ Full graph sample sizes """
+    if graph_type == 'full':
+        obs_data_sizes = [50000 * num_clients, 100000 * num_clients, 150000 * num_clients,
+                          200000 * num_clients, 250000 * num_clients, 300000 * num_clients,
+                          350000 * num_clients, 400000 * num_clients, 500000 * num_clients,
+                          600000 * num_clients, 700000 * num_clients, 800000 * num_clients]
+        int_data_sizes = [32 * (p * num_vars) * num_clients * 100 for p in range(1, 12 + 1)]
+
+    return obs_data_sizes, int_data_sizes
+
+
 if __name__ == '__main__':
-    parallel_experiments_enco_int()
+    parallel_experiments_toy_str()
+

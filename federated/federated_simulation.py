@@ -87,10 +87,10 @@ class FederatedSimulator:
         self.results['priors'] = list()
         self.results['matrices'] = list()
 
-    def initialize_clients_data(self, graph_type: str = "full", num_vars = 30,
+    def initialize_clients_data(self, graph_type: str = "chain", num_vars = 30,
                                 accessible_data_percentage: int = 100,
                                 obs_data_size: int = 20000, int_data_size: int = 2000,
-                                edge_prob: float or None = None):
+                                edge_prob: float or None = None, seed: int = 0):
         """ Initialize client and clients' data for the number of clients in the federated setup.
 
         Args:
@@ -103,11 +103,14 @@ class FederatedSimulator:
             int_data_size (int, optional): Global interventional dataset size. Defaults to 20000.
             edge_prob (floatorNone, optional): Edge existence probability only for random graphs.
                 Defaults to None.
+            seed (int, optional): Define a random seed for the dataset and graph generation.
+                Defaults to 0.
         """
 
         self.__num_vars = num_vars
         global_dataset_dag = ENCOAlg.build_global_dataset(obs_data_size, int_data_size,
-                                                          num_vars, graph_type, edge_prob=edge_prob)
+                                                          num_vars, graph_type, edge_prob=edge_prob,
+                                                          seed=seed)
 
         for client_id in range(self.__num_clients):
             try:
