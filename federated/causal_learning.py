@@ -254,12 +254,15 @@ class ENCOAlg(InferenceAlgorithm):
                                                     else np.append(local_int_data,
                                                                    np.array([int_sample]),
                                                                    axis=0)
-        logger.info(f'Client {self.__client_id}: Shape of the local interventional data: {local_int_data.shape}\n')
+        logger.info(f'Client {self.__client_id}: Shape of the local interventional data: {local_int_data.shape}')
+
+        excluded_variables = [var_idx in range(num_vars) if var_idx not in self.__int_variables]
+        logger.info(f'Client {self.__client_id}: Excluding following variables: {excluded_variables}\n')
 
         self._local_dag_dataset = CausalDAGDataset(self.original_adjacency_mat,
                                                    local_obs_data,
                                                    local_int_data,
-                                                   int_vars=self.__int_variables)
+                                                   exclude_inters=excluded_variables)
 
     def infer_causal_structure(self, gamma_belief: np.ndarray or None,
                                theta_belief: np.ndarray or None, num_epochs: int = 2):
