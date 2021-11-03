@@ -239,9 +239,9 @@ class CausalDAGDataset(CausalDAG):
         """
         A CausalDAG but with existing pre-sampled data and unknown conditional distributions.
         """
-        if data_obs.dtype in [np.uint8, np.int16]:
+        if data_obs.dtype in [np.uint8, np.int16, np.int64]:
             data_obs = data_obs.astype(np.int32)
-        if data_int.dtype in [np.uint8, np.int16]:
+        if data_int.dtype in [np.uint8, np.int16, np.int64]:
             data_int = data_int.astype(np.int32)
 
         if data_obs.dtype == np.int32:

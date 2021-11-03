@@ -256,7 +256,7 @@ class ENCOAlg(InferenceAlgorithm):
                                                                    axis=0)
         logger.info(f'Client {self.__client_id}: Shape of the local interventional data: {local_int_data.shape}')
 
-        excluded_variables = [var_idx in range(num_vars) if var_idx not in self.__int_variables]
+        excluded_variables = [var_idx for var_idx in range(num_vars) if var_idx not in self.__int_variables]
         logger.info(f'Client {self.__client_id}: Excluding following variables: {excluded_variables}\n')
 
         self._local_dag_dataset = CausalDAGDataset(self.original_adjacency_mat,
