@@ -127,32 +127,34 @@ def parallel_experiments_alpha_search():
     experiment_id = process
 
     # Graph
-    graph_types = ["chain", "jungle", "collider"]
-    interventions_dict = {0: [v for v in range(15)],
-                          1: [v for v in range(15, 30)]}
-    num_vars = 30
+    graph_types = ["chain", "jungle", "collider", "full", "bidiag"]
+    interventions_dict = {0: [v for v in range(10)],
+                          1: [v for v in range(10, 20)]}
+    num_vars = 20
 
     # Federated
     num_rounds = 10
     num_clients = [2, 2, 2, 2, 2, 2, 2, 2]
     alphas = [0, 0.1, 0.2, 0.3, 0.4, 0.6, 0.8, 1]
+    initial_masses = [1, 5, 10, 15, 20, 25]
     repeat = 0
 
     for graph_type in graph_types:
-        folder_name = f'GraphAsym-{graph_type}-{num_vars}'
-        obs_data_size, int_data_size = get_datasets_size_locality(graph_type, num_clients[experiment_id], num_vars)
-        federated_model = FederatedSimulator(interventions_dict, num_clients=num_clients[experiment_id],
-                                             num_rounds=num_rounds, experiment_id=experiment_id,
-                                             repeat_id=repeat, output_dir=folder_name)
+        for initial_mass in initial_masses:
+            folder_name = f'AlphaSearch-{graph_type}-{num_vars}-{initial_mass}'
+            obs_data_size, int_data_size = get_datasets_size_locality(graph_type, num_clients[experiment_id], num_vars)
+            federated_model = FederatedSimulator(interventions_dict, num_clients=num_clients[experiment_id],
+                                                num_rounds=num_rounds, experiment_id=experiment_id,
+                                                repeat_id=repeat, output_dir=folder_name)
 
-        federated_model.initialize_clients_data(num_vars=num_vars, graph_type=graph_type, obs_data_size=obs_data_size,
+            federated_model.initialize_clients_data(num_vars=num_vars, graph_type=graph_type, obs_data_size=obs_data_size,
                                                 int_data_size=int_data_size)
 
-        federated_model.execute_simulation(aggregation_method="locality",
-                                           initial_mass=np.array([16, 16]),
-                                           alpha=alphas[experiment_id], beta=0.3, min_mass=1)
+            federated_model.execute_simulation(aggregation_method="locality",
+                                                initial_mass=np.array([initial_mass, initial_mass]),
+                                                alpha=alphas[experiment_id], beta=0.3, min_mass=1)
 
-        logger.info(f'Ending the experiment sequence for process {process}\n')
+    logger.info(f'Ending the experiment sequence for process {process}\n')
 
 
 def parallel_experiments_toy_str():
@@ -163,12 +165,12 @@ def parallel_experiments_toy_str():
 
     # Id
     experiment_id = process
-    specifier = "half"
+    specifier = "unbl"
 
     # Graph
     graph_types = ["jungle", "collider", "chain", "full", "bidiag"]
-    num_vars = 15
-    accessible_percentages = [50, 50]
+    num_vars = 20
+    accessible_percentages = [30, 70]
 
     # Federated
     num_rounds = 10
@@ -209,13 +211,13 @@ def parallel_experiments_toy_rnd():
 
     # Id
     experiment_id = process
-    specifier = "half"
-    accessible_percentages = [50, 50]
+    specifier = "unbl"
+    accessible_percentages = [30, 70]
 
     # Graph
     graph_type = "random"
     edge_probs = [0.1, 0.2, 0.4, 0.6, 0.8, 1.0]
-    num_vars = 15
+    num_vars = 20
 
     # Federated
     num_rounds = 10
@@ -306,5 +308,5 @@ def get_datasets_size_naive(graph_type: str, num_clients: int, num_vars: int):
 
 
 if __name__ == '__main__':
-    parallel_experiments_toy_str()
+    parallel_experiments_alpha_search()
 
