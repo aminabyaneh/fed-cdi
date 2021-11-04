@@ -41,8 +41,8 @@ class ENCO(object):
                  theta_only_num_graphs=4,
                  theta_only_iters=1000,
                  max_graph_stacking=200,
-                 sample_size_obs=5000,
-                 sample_size_inters=200):
+                 sample_size_obs=1000000,
+                 sample_size_inters=20000):
         """
         Creates ENCO object for performing causal structure learning.
 

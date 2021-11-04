@@ -26,6 +26,7 @@
 import glob
 import os.path
 import random
+import itertools
 
 from typing import List, Dict, Tuple
 from networkx.algorithms.shortest_paths.generic import shortest_path

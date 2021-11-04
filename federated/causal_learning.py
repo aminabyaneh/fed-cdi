@@ -204,8 +204,9 @@ class ENCOAlg(InferenceAlgorithm):
         self.inferred_orientation_mat: np.ndarray = np.ndarray([0])
         self.original_adjacency_mat: np.ndarray = np.ndarray([0])
         self.inferred_existence_mat: np.ndarray = np.ndarray([0])
-        self.metrics_dict = dict()
 
+        self.metrics_dict = dict()
+        self.metrics_dict_acycle = dict()
 
         # Initialize federated properties
         self.__client_id = client_id
@@ -291,7 +292,8 @@ class ENCOAlg(InferenceAlgorithm):
         self.inferred_orientation_mat = enco_module.get_theta_matrix()
         self.inferred_existence_mat = enco_module.get_gamma_matrix()
         self.binary_adjacency_mat = ((enco_module.get_binary_adjmatrix()).detach().numpy()).astype(int)
-        self.metrics_dict = enco_module.get_metrics()
+        self.metrics_dict = enco_module.get_metrics(enforce_acyclic_graph=False)
+        self.metrics_dict_acycle = enco_module.get_metrics(enforce_acyclic_graph=True)
 
         torch.cuda.empty_cache()
         logger.info(f'Client {self.__client_id} finished the inference process')

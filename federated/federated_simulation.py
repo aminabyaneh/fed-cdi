@@ -23,8 +23,9 @@
 # limitations under the License.
 # ========================================================================
 
-import os
+import os, sys
 import pickle
+import torch
 import numpy as np
 
 from typing import Dict, List
@@ -34,6 +35,8 @@ from distributed_network import Network
 from logging_settings import logger
 from utils import calculate_metrics, find_shortest_distance_dict
 
+sys.path.append("../")
+from causal_discovery.utils import find_best_acyclic_graph
 
 class FederatedSimulator:
     """
@@ -83,9 +86,17 @@ class FederatedSimulator:
         assert len(self.__interventions_dict.keys()) == self.__num_clients, \
             "Insufficient accessible interventions info."
 
-        self.results = {client_id: list() for client_id in range(self.__num_clients)}
-        self.results['priors'] = list()
-        self.results['matrices'] = list()
+        self.results: Dict[str, List] = dict()
+        self.results['round_adjs'] = list()
+        self.results['round_gammas'] = list()
+        self.results['round_thetas'] = list()
+        self.results['round_metrics'] = list()
+        self.results['round_acycle_adjs'] = list()
+        self.results['round_acycle_metrics'] = list()
+
+        self.results.update({f'client_{client_id}_metrics_acycle': list() for client_id in range(self.__num_clients)})
+        self.results.update({f'client_{client_id}_metrics': list() for client_id in range(self.__num_clients)})
+        self.results.update({f'client_{client_id}_adjs': list() for client_id in range(self.__num_clients)})
 
     def initialize_clients_data(self, graph_type: str = "chain", num_vars = 30,
                                 accessible_data_percentage: int = 100,
@@ -209,11 +220,11 @@ class FederatedSimulator:
             numpy.ndarray: Prior for edge orientation probabilites.
         """
 
-        reference_adj_mat_exists: bool = len(self.results['matrices']) > 0
+        reference_adj_mat_exists: bool = len(self.results['round_adjs']) > 0
         reference_adjacency_mat = np.zeros(shape=(self.__num_vars, self.__num_vars))
 
         if reference_adj_mat_exists:
-            reference_adjacency_mat = self.results['matrices'][round_id - 1][self.__num_clients - 1]
+            reference_adjacency_mat = self.results['round_adjs'][round_id - 1]
             logger.debug(f'Setting reference adj matrix to prior: \n {reference_adjacency_mat} \n')
 
         aggregated_gamma_mat = np.zeros(shape=(self.__num_vars, self.__num_vars))
@@ -234,7 +245,6 @@ class FederatedSimulator:
 
             for v_i, v_j in np.transpose(np.nonzero(reference_adjacency_mat)):
                 min_dist_int = np.min([distance_to_intervened[int_var][v_i] for int_var in client.get_interventions_list()])
-                logger.info(f'Min distance ({v_i},{v_j}): {min_dist_int}')
                 propagated_mass = np.power(alpha, min_dist_int) * initial_mass[client.get_client_id()]
                 client_score_mat[v_i][v_j] = np.max([propagated_mass, min_mass])
             logger.debug(f'Reliability scores for client {client.get_client_id()}: \n {client_score_mat}\n')
@@ -263,17 +273,25 @@ class FederatedSimulator:
             prior_theta (numpy.ndarray): Edge orientation matrix acquired at the end of the round.
         """
 
+        self.results['round_gammas'].append(prior_gamma)
+        self.results['round_thetas'].append(prior_theta)
+
         ground_truth_matrix = self.__clients[0].original_adjacency_mat
         round_discovered_matrix = FederatedSimulator.get_binary_adjacency_mat(prior_gamma, prior_theta)
-        round_metrics = calculate_metrics(round_discovered_matrix, ground_truth_matrix)
-        self.results['priors'].append(round_metrics)
+        round_acyclic_matrix = FederatedSimulator.get_acyclic_adjacency_mat(prior_gamma, prior_theta)
 
-        clients_adjs = [client.binary_adjacency_mat for client in self.__clients]
-        clients_adjs.append(round_discovered_matrix)
-        self.results['matrices'].append(clients_adjs)
+        round_metrics = calculate_metrics(round_discovered_matrix, ground_truth_matrix)
+        round_acycle_metrics = calculate_metrics(round_acyclic_matrix, ground_truth_matrix)
+
+        self.results['round_metrics'].append(round_metrics)
+        self.results['round_acycle_metrics'].append(round_acycle_metrics)
+        self.results['round_adjs'].append(round_discovered_matrix)
+        self.results['round_acycle_adjs'].append(round_acyclic_matrix)
 
         for client in self.__clients:
-            self.results[client.get_client_id()].append(client.metrics_dict)
+            self.results[f'client_{client.get_client_id()}_adjs'].append(client.binary_adjacency_mat)
+            self.results[f'client_{client.get_client_id()}_metrics'].append(client.metrics_dict)
+            self.results[f'client_{client.get_client_id()}_metrics_acycle'].append(client.metrics_dict_acycle)
 
         logger.info(f'End of the round results: \n {round_discovered_matrix} \n {round_metrics} \n')
 
@@ -297,6 +315,25 @@ class FederatedSimulator:
         """
 
         return (((gamma > 0.0) * (theta > 0.0)) == 1).astype(int)
+
+    @staticmethod
+    def get_acyclic_adjacency_mat(gamma: np.ndarray, theta: np.ndarray) -> np.ndarray:
+        """ Calculate the adjacency matrix based on acyclicity constraint.
+
+        Args:
+            gamma (numpy.ndarray): Edge existence matrix.
+            theta (numpy.ndarray): Edge orientation matrix.
+
+        Returns:
+            numpy.ndarray: Binary and acyclic adjacency matrix.
+        """
+        gamma_t = torch.from_numpy(gamma)
+        theta_t = torch.from_numpy(theta)
+
+        acycle_mat_tensor = find_best_acyclic_graph(gamma=torch.sigmoid(gamma_t),
+                                                    theta=torch.sigmoid(theta_t))
+
+        return acycle_mat_tensor.numpy()
 
     @staticmethod
     def adjust_theta(prior_theta):
