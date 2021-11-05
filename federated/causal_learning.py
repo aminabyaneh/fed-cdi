@@ -236,7 +236,7 @@ class ENCOAlg(InferenceAlgorithm):
         start_index = data_length * (self.__client_id)
 
         data_length_acc = int(data_length * (self.__accessible_p / 100))
-        end_index = start_index + data_length_acc - 1
+        end_index = start_index + data_length_acc
 
         local_obs_data = self.__data[start_index: end_index]
         logger.info(f'Client {self.__client_id}: Shape of the local observational data: {local_obs_data.shape}')
@@ -247,7 +247,7 @@ class ENCOAlg(InferenceAlgorithm):
             start_index = data_length * (self.__client_id)
 
             data_length_acc = int(data_length * (self.__accessible_p / 100))
-            end_index = start_index + data_length_acc - 1
+            end_index = start_index + data_length_acc
 
             int_sample = self.__data_int[var_idx][start_index: end_index]
 
@@ -388,7 +388,7 @@ class ENCOAlg(InferenceAlgorithm):
             # Scale is set to 0.0, which represents a uniform distribution.
             int_dist = _random_categ(size=(var.prob_dist.num_categs,), scale=0.0, axis=-1)
 
-            size = (int_data_size // len(graph.variables)) + 1
+            size = (int_data_size // len(graph.variables))
             # Sample from interventional distribution
             value = np.random.multinomial(n=1, pvals=int_dist,
                                         size=(size,))

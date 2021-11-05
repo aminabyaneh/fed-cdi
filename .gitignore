@@ -147,5 +147,8 @@ causal_graphs/exported_graphs.zip
 *.pdf
 
 # Logs
-federated/logs
+federated/cluster/logs*
+federated/cluster/data*
 data/
+
+

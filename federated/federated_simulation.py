@@ -283,10 +283,10 @@ class FederatedSimulator:
         round_metrics = calculate_metrics(round_discovered_matrix, ground_truth_matrix)
         round_acycle_metrics = calculate_metrics(round_acyclic_matrix, ground_truth_matrix)
 
-        self.results['round_metrics'].append(round_metrics)
-        self.results['round_acycle_metrics'].append(round_acycle_metrics)
         self.results['round_adjs'].append(round_discovered_matrix)
+        self.results['round_metrics'].append(round_metrics)
         self.results['round_acycle_adjs'].append(round_acyclic_matrix)
+        self.results['round_acycle_metrics'].append(round_acycle_metrics)
 
         for client in self.__clients:
             self.results[f'client_{client.get_client_id()}_adjs'].append(client.binary_adjacency_mat)
