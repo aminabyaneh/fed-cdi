@@ -113,6 +113,7 @@ def calculate_metrics(predicted_mat: np.ndarray, ground_truth: np.ndarray) -> Di
     FP = false_positives.astype(float).sum()
     FN = false_negatives.astype(float).sum()
     TN = TN - predicted_mat.shape[-1]
+    TN = 0 if TN < 0 else TN
 
     recall = TP / max(TP + FN, 1e-5)
     precision = TP / max(TP + FP, 1e-5)

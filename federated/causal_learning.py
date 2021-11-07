@@ -27,13 +27,10 @@ import os, sys
 
 import torch
 import numpy as np
-import pandas as pd
-import networkx as nx
-import matplotlib.pyplot as plt
+import pickle
 
 from typing import List
 from abc import ABC, abstractmethod
-from networkx import DiGraph, circular_layout
 
 from logging_settings import logger
 
@@ -181,7 +178,6 @@ class ENCOAlg(InferenceAlgorithm):
                  int_variables: List[int] or None = None):
         """ Initialize a ENCO Algorithm class.
 
-
         Args:
             client_id (int): The unique identifier for the client using this learning module.
             external_dataset_dag (CausalDAGDataset): The global dataset that all the clients have
@@ -212,6 +208,9 @@ class ENCOAlg(InferenceAlgorithm):
         self.__client_id = client_id
         self.__accessible_p = accessible_percentage
         self.__int_variables = int_variables
+
+        if not torch.cuda.is_available():
+            logger.warning('Cuda GPU is not available, running on cpu is extremely slow!')
 
         # Initialize the global dataset
         if external_dataset_dag is None:
@@ -266,7 +265,8 @@ class ENCOAlg(InferenceAlgorithm):
                                                    exclude_inters=excluded_variables)
 
     def infer_causal_structure(self, gamma_belief: np.ndarray or None,
-                               theta_belief: np.ndarray or None, num_epochs: int = 2):
+                               theta_belief: np.ndarray or None, num_epochs: int = 2,
+                               gpu_name: str = 'cuda:0', cache: os.DirEntry = None):
         """This function calls an inference algorithm using ENCO core functions and class,
         given a dataset_dag.
 
@@ -277,6 +277,9 @@ class ENCOAlg(InferenceAlgorithm):
             gamma_belief (np.ndarray or None): The prior information on edge existence.
             theta_belief (np.ndarray or None): The prior information on edge orientation.
             num_epochs (int, optional): Total number of epochs for ENCO. Defaults to 2.
+            gpu_name (str, optional): In case the enco should be passed to another gpu.
+                Defaults to cuda:0.
+            cache (os.DirEntry, optional): For keeping track of data during concurrency.
         """
 
         logger.info(f'Client {self.__client_id} started the inference process')
@@ -284,7 +287,6 @@ class ENCOAlg(InferenceAlgorithm):
                            prior_theta=theta_belief)
 
         if torch.cuda.is_available():
-            gpu_name = 'cuda:0'
             enco_module.to(torch.device(gpu_name))
 
         enco_module.discover_graph(num_epochs=num_epochs)
@@ -295,8 +297,27 @@ class ENCOAlg(InferenceAlgorithm):
         self.metrics_dict = enco_module.get_metrics(enforce_acyclic_graph=False)
         self.metrics_dict_acycle = enco_module.get_metrics(enforce_acyclic_graph=True)
 
+        self.save_results(cache)
         torch.cuda.empty_cache()
+
         logger.info(f'Client {self.__client_id} finished the inference process')
+
+    def save_results(self, cache):
+        if cache is not None:
+            with open(cache, 'wb') as f:
+                pickle.dump(self.inferred_orientation_mat, f)
+                pickle.dump(self.inferred_existence_mat, f)
+                pickle.dump(self.binary_adjacency_mat, f)
+                pickle.dump(self.metrics_dict, f)
+                pickle.dump(self.metrics_dict_acycle, f)
+
+    def retrieve_results(self, cache):
+        with open(cache, 'rb') as f:
+            self.inferred_orientation_mat = pickle.load(f)
+            self.inferred_existence_mat = pickle.load(f)
+            self.binary_adjacency_mat = pickle.load(f)
+            self.metrics_dict = pickle.load(f)
+            self.metrics_dict_acycle = pickle.load(f)
 
     def get_client_id(self):
         """ Getter for client id.
@@ -352,10 +373,10 @@ class ENCOAlg(InferenceAlgorithm):
                                                       graph_func=get_graph_func(graph_type),
                                                       edge_prob=edge_prob,
                                                       seed=seed)
-        logger.info(f'Graph is built with the provided information: \n {graph}')
+        logger.debug(f'Graph is built with the provided information: \n {graph}')
 
         original_adjacency_mat = graph.adj_matrix
-        logger.info(f'Global dataset adjacency matrix: \n {original_adjacency_mat.astype(int)}')
+        logger.debug(f'Global dataset adjacency matrix: \n {original_adjacency_mat.astype(int)}')
 
         data_obs = graph.sample(batch_size=obs_data_size, as_array=True)
         logger.info(f'Shape of global observational data: {data_obs.shape}')

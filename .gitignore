@@ -150,5 +150,6 @@ causal_graphs/exported_graphs.zip
 federated/cluster/logs*
 federated/cluster/data*
 data/
+*.pickle
 
 

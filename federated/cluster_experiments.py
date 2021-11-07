@@ -31,7 +31,7 @@ from logging_settings import logger
 from utils import split_variables_set
 
 
-def parallel_experiments_sweep_clients(graph_type = "full"):
+def parallel_experiments_sweep_clients_str():
     """ A method to handle parallel MPI cluster experiments.
     """
     process = int(str(sys.argv[1]))
@@ -43,35 +43,78 @@ def parallel_experiments_sweep_clients(graph_type = "full"):
 
     # Federated
     num_rounds = 10
-    num_clients = [1, 2, 3, 4, 5, 6, 7, 8]
+    num_clients = [1, 2, 4, 6, 8]
 
     # Graph
     num_vars = 20
-    specifiers = [80, 70, 60, 50, 40, 30, 20, 10]
-    specifier = specifiers[experiment_id]
-
-    # Dataset
     obs_sample_size = 10000
+    graph_types = ["collider", "bidiag", "full", "chain", "jungle"]
+    specifiers = [12, 24, 48, 96, 144, 192, 240]
+    specifier = specifiers[experiment_id]
     aggregation_method = "naive"
 
-    for num_client in num_clients:
-        logger.info(f'NUMBER OF SAMPLES: {specifier}- NUMBER OF CLIENTS: {num_client}')
+    for graph_type in graph_types:
+        for idx, num_client in enumerate(num_clients):
+            logger.info(f'NUMBER OF SAMPLES: {specifier}- NUMBER OF CLIENTS: {num_client}')
+            
+            obs_data_size = obs_sample_size * num_client
+            int_data_size = specifier * num_vars
+            interventions_dict = {cid: [v for v in range(num_vars)] for cid in range(num_client)}
+            folder_name = f'ClientSweep-{graph_type}-{num_vars}-{specifier}'
 
-        obs_data_size = obs_sample_size * num_client
-        int_data_size = specifier * num_vars
-        interventions_dict = {cid: [v for v in range(num_vars)] for cid in range(num_client)}
-        folder_name = f'ClientSweep-{graph_type}-{num_vars}-{specifier}'
+            for seed in range(repeat_count):
+                federated_model = FederatedSimulator(interventions_dict, num_clients=num_client,
+                                                        num_rounds=num_rounds, experiment_id=idx,
+                                                        repeat_id=seed, output_dir=folder_name)
+                federated_model.initialize_clients_data(num_vars=num_vars, graph_type=graph_type,
+                                                        obs_data_size=obs_data_size,
+                                                        int_data_size=int_data_size,
+                                                        seed=seed)
+                if aggregation_method == "naive":
+                    federated_model.execute_simulation(aggregation_method=aggregation_method)
 
-        for seed in range(repeat_count):
-            federated_model = FederatedSimulator(interventions_dict, num_clients=num_client,
-                                                    num_rounds=num_rounds, experiment_id=experiment_id,
-                                                    repeat_id=seed, output_dir=folder_name)
-            federated_model.initialize_clients_data(num_vars=num_vars, graph_type=graph_type,
-                                                    obs_data_size=obs_data_size,
-                                                    int_data_size=int_data_size,
-                                                    seed=seed)
-            if aggregation_method == "naive":
-                federated_model.execute_simulation(aggregation_method=aggregation_method)
+    logger.info(f'Ending the experiment sequence for process {process}\n')
+
+    
+def parallel_experiments_sweep_clients_rnd():
+    """ A method to handle parallel MPI cluster experiments.
+    """
+    process = int(str(sys.argv[1]))
+    logger.info(f'Starting the experiment sequence for process {process}\n')
+
+    # Id
+    experiment_id = process
+    repeat_count = 5
+
+    # Federated
+    num_rounds = 10
+    num_clients = [1, 2, 4, 6, 8]
+
+    # Graph
+    num_vars = 20
+    graph_types = [0.1, 0.2, 0.4, 0.6, 0.8]
+    specifiers = [12, 24, 48, 96, 144, 192, 240]
+    specifier = specifiers[experiment_id]
+    aggregation_method = "naive"
+
+    for graph_type in graph_types:
+        for idx, num_client in enumerate(num_clients):
+            logger.info(f'NUMBER OF SAMPLES: {specifier}- NUMBER OF CLIENTS: {num_client}')
+            obs_data_size = graph_type * 15000 * num_client
+            int_data_size = specifier * num_vars * num_client
+            interventions_dict = {cid: [v for v in range(num_vars)] for cid in range(num_client)}
+            folder_name = f'ClientSweepNODIV-{graph_type}-{num_vars}-{specifier}'
+
+            for seed in range(repeat_count):
+                federated_model = FederatedSimulator(interventions_dict, num_clients=num_client,
+                                                        num_rounds=num_rounds, experiment_id=idx,
+                                                        repeat_id=seed, output_dir=folder_name)
+                federated_model.initialize_clients_data(num_vars=num_vars, graph_type="random",
+                                                        obs_data_size=obs_data_size,
+                                                        int_data_size=int_data_size, edge_prob=graph_type,
+                                                        seed=seed)
+                if aggregation_method == "naive":
+                    federated_model.execute_simulation(aggregation_method=aggregation_method)
 
     logger.info(f'Ending the experiment sequence for process {process}\n')
 
@@ -127,6 +170,60 @@ def parallel_experiments_enco_balanced_str():
 
     logger.info(f'Ending the experiment sequence for process {process}\n')
 
+    
+def parallel_experiments_enco_balanced_int_rnd():
+    """ A method to handle parallel MPI cluster experiments.
+    """
+    process = int(str(sys.argv[1]))
+    logger.info(f'Starting the experiment sequence for process {process}\n')
+
+    # Id
+    experiment_id = process
+    repeat_count = 5
+
+    # Federated
+    num_rounds = 10
+    num_clients = [1, 2, 0]
+
+    # Graph
+    num_vars = 20
+    edge_probs = [0.1, 0.2, 0.4, 0.6, 0.8]
+    specifiers = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+    # Dataset
+    int_sample_sizes = [2, 3, 4, 5, 6]
+    obs_sample_sizes = [5000, 5000, 7000, 10000, 15000]
+    aggregation_method = "naive"
+
+    num_client = num_clients[experiment_id]
+    data_weight = num_client
+
+    if not num_client:
+        num_client = 1
+        data_weight = 2
+
+    interventions_dict = {cid: [v for v in range(num_vars)] for cid in range(num_client)}
+    
+    graph_type = "random"
+    for specifier in specifiers:
+        for idx, edge_prob in enumerate(edge_probs):
+            obs_data_size = obs_sample_sizes[idx] * data_weight
+            int_data_size = int_sample_sizes[idx] * data_weight * specifier * num_vars
+            folder_name = f'BalancedSetup-{edge_prob}-{num_vars}-{specifier}'
+
+            for seed in range(repeat_count):
+                federated_model = FederatedSimulator(interventions_dict, num_clients=num_client,
+                                                     num_rounds=num_rounds, experiment_id=experiment_id,
+                                                     repeat_id=seed, output_dir=folder_name)
+                federated_model.initialize_clients_data(num_vars=num_vars, graph_type=graph_type, edge_prob=edge_prob,
+                                                        obs_data_size=obs_data_size,
+                                                        int_data_size=int_data_size,
+                                                        seed=seed)
+                if aggregation_method == "naive":
+                    federated_model.execute_simulation(aggregation_method=aggregation_method)
+
+    logger.info(f'Ending the experiment sequence for process {process}\n')
+
 
 def parallel_experiments_toy_str():
     """ A method to handle parallel MPI cluster experiments.
@@ -146,7 +243,7 @@ def parallel_experiments_toy_str():
     num_clients = [1, 1, 2]
     repeat = 10
 
-    accessible_percentages_list = ([10, 90], [20, 80], [50, 50])
+    accessible_percentages_list = ([30, 70], [20, 80], [50, 50])
     for accessible_percentages in accessible_percentages_list:
         specifier = f'aps-{accessible_percentages[0]}-{accessible_percentages[1]}'
 
@@ -184,8 +281,6 @@ def parallel_experiments_toy_rnd():
 
     # Id
     experiment_id = process
-    accessible_percentages = [10, 90]
-    specifier = f'aps-{accessible_percentages[0]}-{accessible_percentages[1]}'
 
     # Graph
     graph_type = "random"
@@ -197,7 +292,7 @@ def parallel_experiments_toy_rnd():
     num_clients = [1, 1, 2]
     repeat = 10
 
-    accessible_percentages_list = ([10, 90], [20, 80], [50, 50])
+    accessible_percentages_list = [[30, 70], [20, 80], [50, 50]]
     for accessible_percentages in accessible_percentages_list:
         specifier = f'aps-{accessible_percentages[0]}-{accessible_percentages[1]}'
 
@@ -291,7 +386,7 @@ def get_datasets_size_locality(graph_type: str, num_clients: int, num_vars: int,
 
     """ Random graphs sample sizes """
     if graph_type == 'random':
-        obs_data_sizes = edge_prob * 15000 * num_clients
+        obs_data_sizes = edge_prob * 20000 * num_clients
         int_data_sizes = 200 * num_vars * num_clients
 
     return obs_data_sizes, int_data_sizes
@@ -334,5 +429,5 @@ def get_datasets_size_naive(graph_type: str, num_clients: int, num_vars: int):
 
 
 if __name__ == '__main__':
-    parallel_experiments_sweep_clients()
+    parallel_experiments_toy_rnd()
 

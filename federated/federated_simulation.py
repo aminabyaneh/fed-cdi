@@ -23,10 +23,12 @@
 # limitations under the License.
 # ========================================================================
 
+import logging
 import os, sys
 import pickle
 import torch
 import numpy as np
+import shutil
 
 from typing import Dict, List
 
@@ -37,6 +39,7 @@ from utils import calculate_metrics, find_shortest_distance_dict
 
 sys.path.append("../")
 from causal_discovery.utils import find_best_acyclic_graph
+
 
 class FederatedSimulator:
     """
@@ -54,7 +57,7 @@ class FederatedSimulator:
     def __init__(self, accessible_interventions: Dict[int, List[int]],
                  num_rounds: int = 5, num_clients: int = 2, experiment_id: int = 0,
                  repeat_id: int = 0, output_dir: str = 'default_federated_experiment',
-                 verbose: bool = False):
+                 client_parallelism: bool = False, verbose: bool = False):
         """ Initialize a federated setup for simulation.
 
         Args:
@@ -66,6 +69,9 @@ class FederatedSimulator:
             repeat_id (int, optional): Number of random seeds for each simulation. Defaults to 0.
             output_dir (str, optional): Directory for saving the results. Defaults to
                 'default_federated_experiment'.
+
+            client_parallelism (bool, optional): Set True if you have enough GPU to give each client one.
+                Defaults to False.
             verbose (bool, optional): Set True to see more detailed output. Defaults to False.
         """
 
@@ -82,21 +88,20 @@ class FederatedSimulator:
 
         self.__num_vars = 0
         self.__clients : List[ENCOAlg] = list()
+        self.__client_parallelism = client_parallelism
         self.__interventions_dict = accessible_interventions
         assert len(self.__interventions_dict.keys()) == self.__num_clients, \
             "Insufficient accessible interventions info."
 
-        self.results: Dict[str, List] = dict()
-        self.results['round_adjs'] = list()
-        self.results['round_gammas'] = list()
-        self.results['round_thetas'] = list()
-        self.results['round_metrics'] = list()
-        self.results['round_acycle_adjs'] = list()
-        self.results['round_acycle_metrics'] = list()
+        if verbose: logger.setLevel(logging.DEBUG)
+        if self.__client_parallelism:
+            gpu_count = torch.cuda.device_count()
+            assert gpu_count >= self.__num_clients, \
+                f'{gpu_count} GPU(s) not enough to perform {self.__num_clients}-client parallelism'
+            torch.multiprocessing.set_start_method('spawn', force=True)
 
-        self.results.update({f'client_{client_id}_metrics_acycle': list() for client_id in range(self.__num_clients)})
-        self.results.update({f'client_{client_id}_metrics': list() for client_id in range(self.__num_clients)})
-        self.results.update({f'client_{client_id}_adjs': list() for client_id in range(self.__num_clients)})
+        self.results: Dict[str, List] = dict()
+        self.initialize_results_dict()
 
     def initialize_clients_data(self, graph_type: str = "chain", num_vars = 30,
                                 accessible_data_percentage: int = 100,
@@ -133,6 +138,20 @@ class FederatedSimulator:
 
             self.__clients.append(enco_module)
 
+    def initialize_results_dict(self):
+        """Initializes the dictionary containing final results and per-round results.
+        """
+
+        self.results['round_adjs'] = list()
+        self.results['round_gammas'] = list()
+        self.results['round_thetas'] = list()
+        self.results['round_metrics'] = list()
+        self.results['round_acycle_adjs'] = list()
+        self.results['round_acycle_metrics'] = list()
+
+        self.results.update({f'client_{client_id}_metrics_acycle': list() for client_id in range(self.__num_clients)})
+        self.results.update({f'client_{client_id}_metrics': list() for client_id in range(self.__num_clients)})
+        self.results.update({f'client_{client_id}_adjs': list() for client_id in range(self.__num_clients)})
 
     def execute_simulation(self, aggregation_method: str = "naive", num_epochs: int = 2,
                            **kwargs):
@@ -147,7 +166,6 @@ class FederatedSimulator:
                 Any other argument that should be passed to the aggregation function.
         """
 
-        logger.info(f'Running experiment {self.__experiment_id}')
         assert len(self.__clients), "Clients are not initialized."
         assert aggregation_method in ["naive", "locality"], "Aggregation method not yet defined."
 
@@ -158,23 +176,74 @@ class FederatedSimulator:
         for round_id in range(self.__num_rounds):
             logger.info(f'Initiating round {round_id} of federated setup')
 
-            """ Inference stage """
-            for client in self.__clients:
-                client.infer_causal_structure(prior_gamma, prior_theta, num_epochs)
+            """ Inference stage"""
+            self.infer_local_models(prior_gamma, prior_theta, num_epochs)
 
             """ Aggregation stage """
-            if aggregation_method == "naive":
-                prior_gamma, prior_theta = self.naive_aggregation()
-            if aggregation_method == "locality":
-                prior_gamma, prior_theta = self.locality_aggregation(round_id=round_id, **kwargs)
+            agg_gamma, agg_theta = self.aggregate_clients_updates(aggregation_method, round_id, **kwargs)
 
             """ Store round results """
-            self.update_results(prior_gamma, prior_theta)
+            self.update_results(agg_gamma, agg_theta)
+
+            """ Incorporate beliefs"""
+            prior_gamma, prior_theta = agg_gamma, agg_theta
 
         """ Save the final results """
         self.save_results()
 
         logger.info(f'Finishing experiment {self.__experiment_id}\n')
+
+    def infer_local_models(self, prior_gamma: np.ndarray, prior_theta: np.ndarray, num_epochs):
+        """Execute the local learning methods for all clients.
+
+        Note: Higher levels of parallelism are possible by defining client_parallelism in the instantiation step.
+
+        Args:
+            prior_gamma (np.ndarray): Prior for edge existence matrix.
+            prior_theta (np.ndarray): Prior for edge orientation matrix.
+            num_epochs (int): Number of epochs for ENCO.
+        """
+
+        if self.__client_parallelism:
+            setup_cache_path = os.path.join(self.__output_dir, '.mpcache', f'res-{self.__experiment_id}')
+            os.makedirs(setup_cache_path, exist_ok=True)
+
+            clients_processes = list()
+            for client in self.__clients:
+                gpu_name = f'cuda:{client.get_client_id()}'
+                setup_cache_file = os.path.join(setup_cache_path, f'{id(client)}.pickle')
+                client_process = torch.multiprocessing.Process(target=client.infer_causal_structure,
+                                                               args=(prior_gamma, prior_theta, num_epochs, gpu_name,
+                                                                     setup_cache_file,))
+                clients_processes.append(client_process)
+
+            for client_p in clients_processes: client_p.start()
+            for client_p in clients_processes: client_p.join()
+
+            for client in self.__clients:
+                setup_cache_file = os.path.join(setup_cache_path, f'{id(client)}.pickle')
+                client.retrieve_results(setup_cache_file)
+        else:
+            for client in self.__clients:
+                    client.infer_causal_structure(prior_gamma, prior_theta, num_epochs)
+
+    def aggregate_clients_updates(self, aggregation_method, round_id, **kwargs):
+        """Perform aggregation step for all clients.
+
+        Args:
+            aggregation_method (str): Can be naive or locality aggregation so far.
+            round_id (int): Current roung id.
+
+        Returns:
+            np.ndarray, np.ndarray: Aggregated gamma and theta matrices.
+        """
+
+        if aggregation_method == "naive":
+            agg_gamma, agg_theta = self.naive_aggregation()
+        if aggregation_method == "locality":
+            agg_gamma, agg_theta = self.locality_aggregation(round_id=round_id, **kwargs)
+
+        return agg_gamma, agg_theta
 
     def naive_aggregation(self):
         """ Naive aggregation based on simple averaging and size of local dataset.
@@ -237,6 +306,7 @@ class FederatedSimulator:
 
             if not reference_adj_mat_exists:
                 reference_adjacency_mat = client.binary_adjacency_mat
+                print(reference_adjacency_mat.shape)
                 logger.debug(f'Setting reference adj matrix to clients local: \n {reference_adjacency_mat} \n')
 
             distance_to_intervened = {var_idx: find_shortest_distance_dict(var_idx, reference_adjacency_mat) \
@@ -302,6 +372,9 @@ class FederatedSimulator:
         with open(file_dir, 'wb') as handle:
             pickle.dump(self.results, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
+        cache_dir = os.path.join(self.__output_dir, '.mpcache')
+        # shutil.rmtree(cache_dir)
+
     @staticmethod
     def get_binary_adjacency_mat(gamma: np.ndarray, theta: np.ndarray) -> np.ndarray:
         """ Calculate the adjacency matrix based on gamma and theta matrices.
@@ -357,7 +430,7 @@ class FederatedSimulator:
 if __name__ == '__main__':
     interventions_dict = {0: [0, 1, 2, 3], 1: [4, 5, 6, 7, 8]}
 
-    federated_model = FederatedSimulator(interventions_dict, num_clients=2, num_rounds=10)
+    federated_model = FederatedSimulator(interventions_dict, num_clients=2, num_rounds=10, client_parallelism=True)
     federated_model.initialize_clients_data(num_vars=10, graph_type="full")
     federated_model.execute_simulation(aggregation_method="locality",
                                        initial_mass=np.array([16, 16]),
