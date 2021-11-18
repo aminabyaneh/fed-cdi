@@ -151,5 +151,6 @@ federated/cluster/logs*
 federated/cluster/data*
 data/
 *.pickle
+baselines/dcdi/data*
 
 
