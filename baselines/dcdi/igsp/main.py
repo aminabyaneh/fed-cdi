@@ -25,7 +25,9 @@ def load_data(opt):
                                  regimes_to_ignore=opt.regimes_to_ignore)
 
     gt_dag = train_data.adjacency.detach().cpu().numpy()
+    print(f'Loaded data with following adj_mat: \n{gt_dag}')
     train_data_pd = pd.DataFrame(train_data.dataset.detach().cpu().numpy())
+    print(f'Shape of train data is {train_data_pd.shape}')
     mask_pd = pd.DataFrame(train_data.masks)
     regimes = train_data.regimes
 
