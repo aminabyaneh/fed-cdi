@@ -22,15 +22,18 @@
 .. OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 .. SOFTWARE.
 """
+
 import os
 import uuid
 import warnings
 import networkx as nx
+
 from shutil import rmtree
 from cdt.causality.graph.model import GraphModel
 from pandas import DataFrame, read_csv
 from cdt.utils.Settings import SETTINGS
 from cdt.utils.R import RPackages, launch_R_script
+
 import numpy as np
 import torch
 
