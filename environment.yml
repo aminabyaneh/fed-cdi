@@ -1,4 +1,4 @@
-name: enco
+name: federated_cl
 channels:
   - pytorch
   - nvidia
