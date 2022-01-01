@@ -17,11 +17,11 @@
 import logging
 import sys
 
-# Set the log level here
+# Set the defult log level here
 logging_level = logging.INFO
 
 # Change the logging format here
-logging.basicConfig(format='%(levelname)s - %(filename)s - %(lineno)d - %(funcName)s - %(asctime)s - %(message)s',
+logging.basicConfig(format='%(levelname)s - %(filename)s - %(lineno)d - %(asctime)s - %(message)s',
                     level=logging_level,
                     stream=sys.stdout)
 

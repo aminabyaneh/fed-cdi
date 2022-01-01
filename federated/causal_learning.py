@@ -27,19 +27,17 @@ import os, sys
 
 import torch
 import numpy as np
-import pandas as pd
-import networkx as nx
-import matplotlib.pyplot as plt
+import pickle
 
 from typing import List
 from abc import ABC, abstractmethod
-from networkx import DiGraph, circular_layout
 
 from logging_settings import logger
 
 sys.path.append("../")
 
 from causal_discovery.enco import ENCO
+from causal_graphs.graph_definition import CausalDAG
 from causal_graphs.graph_definition import CausalDAGDataset
 from causal_graphs.graph_generation import generate_categorical_graph, get_graph_func
 from causal_graphs.variable_distributions import _random_categ
@@ -47,142 +45,22 @@ from causal_graphs.variable_distributions import _random_categ
 class InferenceAlgorithm(ABC):
     """
     Abstract class for a variety of causal learning methods. Each implementation of new
-    algorithms should inherit from the CausalModel object.
+    algorithms should inherit from the InferenceAlgorithm object.
 
-    Note: The DSDI method  requires some number of iterations to conclude the results,
-    also there are some problems related to storing and loading the dataset since they
-    only support their own dataset as of now.
-
-    Note: With regard to CDT library, as soon as the setting cdt.SETTINGS.GPU > 0,
-    the execution of GPU compatible algorithms will be automatically performed on
-    those devices, making the prediction step similar to a traditional algorithm.
     """
 
     def __init__(self, verbose: bool = False):
         """
-        Initialize a CausalModel object.
+        Initialize a InferenceAlgorithm object.
         """
-
-        np.set_printoptions(precision=3, suppress=True)
         np.random.seed(100)
 
-        # Local attributes of CausalModel
-        self._verbose = verbose
-        self._data: pd.DataFrame = pd.DataFrame()
-        self._data_int: pd.DataFrame = pd.DataFrame()
-        self._graph: nx.classes.digraph.DiGraph = DiGraph()
-
-        # Global attributes of the CausalModel
-        self.original_adjacency_mat: np.ndarray = np.ndarray([0])
-        self.inferred_adjacency_mat: np.ndarray = np.ndarray([0])
-        self.inferred_DiGraph: nx.classes.digraph.DiGraph = DiGraph()
-
-    def _extract_designated_variables(self, accessible_variables):
-        """
-        Only keep the accessible part of variables.
-
-        Args:
-            accessible_variables (List[str]): Name of the local variables.
-        """
-
-        remove_variables_list: List[int] = list()
-        for index, col in enumerate(self._data.columns[1:]):
-            if col not in accessible_variables:
-                remove_variables_list.append(index)
-
-        # Trim the adjacency matrix
-        parsed_adjacency_mat = np.delete(arr=nx.to_numpy_matrix(self._graph),
-                                         obj=remove_variables_list,
-                                         axis=0)
-
-        self.original_adjacency_mat = np.delete(arr=parsed_adjacency_mat,
-                                                obj=remove_variables_list,
-                                                axis=1)
-
-        # Trim the dataset
-        self._data = self._data[accessible_variables]
-
-    def _extract_designated_observations(self, accessible_percentage):
-        """
-        Only keep the accessible part of observations based on randomness and indicated percentage.
-
-        Args:
-            accessible_percentage (float): Name of the local variables.
-        """
-        # Randomize selection
-        self._data = self._data.sample(frac=accessible_percentage / 100)
-
-        # Copy the original adjacency matrix
-        self.original_adjacency_mat = nx.to_numpy_array(self._graph)
-
-    def get_observations_size(self) -> int:
-        """
-        Return the number of observations (rows) in the _data.
-
-        Returns:
-            int: The size of observations, or the rows in dataframe.
-        """
-
-        return self._data.shape[0]
-
-    def load_local_dataset(self, accessible_data: List[str] or float,
-                           assignment_type: str = 'observation_assignment',
-                           dataset_name: str = "sachs", import_from_directory: bool = False):
+    @abstractmethod
+    def build_local_dataset(self):
         """
         Load only a part of observations/variables from a global dataset to implement locality
         and privacy of data.
-
-        Args:
-            accessible_data (List[str] or float): Choose how much of the dataset can the client see.
-            Based on the chosen assignment type, this can be a float (percentage) or a list of accessible,
-            variables.
-
-            assignment_type(str): This parameter could be either 'observation_assignment' or
-            'variable_assignment'. Defaults tp 'observation_assignment'.
-
-            dataset_name (str): Use a default dataset from CDT library. Defaults to 'sachs'. Alternatively,
-            you can import your own dataset as a dataframe by using a url instead of name.
-
-            import_from_directory (bool): If true, the dataset is loaded from a csv file instead of
-            a predefined CDT dataset. Use the dataset name for addressing purposes. Defaults to False.
         """
-        if import_from_directory:
-            # Load a pandas dataframe from a directory
-            self._data, self._graph = pd.read_csv(dataset_name), None
-        else:
-            # Load a default dataset from CDT library
-            self._data, self._graph = load_dataset(dataset_name)
-
-        # Determine the assignment type
-        if assignment_type == 'observation_assignment':
-            self._extract_designated_observations(accessible_percentage=accessible_data)
-        else:
-            self._extract_designated_variables(accessible_variables=accessible_data)
-
-    def visualize_causal_graph(self, is_original: bool = False,
-                               file_name: str = 'dag',
-                               directory: str = '../data'):
-        """
-        Visualize the original or calculated causal graphs.
-
-        Args:
-            is_original (bool): Set True if the visualization of original data graph is required.
-            Defaults to False.
-
-            file_name (str): Name of the file to be saved. Defaults to dag.
-            directory (str): The directory in which the file is saved. Defaults to 'data'.
-        """
-
-        plotted_graph = self.inferred_DiGraph
-        if not is_original:
-            plotted_graph = self._graph
-
-        plt.figure(figsize=[10, 12])
-        nx.draw_networkx(plotted_graph, pos=circular_layout(plotted_graph), arrows=True, with_labels=True,
-                         arrowstyle='Simple', node_size=2000, font_size=10)
-
-        plt.savefig(os.path.join(directory, file_name + '.png'))
-        plt.show()
 
     @abstractmethod
     def infer_causal_structure(self):
@@ -289,188 +167,260 @@ class ENCOAlg(InferenceAlgorithm):
     getting updated and- hopefully- improved over the iterations.
 
     Note: A forked version of this repository is used along with the federated dir.
+
+    Note: Before using this class, you have to make sure that conda environment related to
+    ENCO algorithm is up and running (named enco). For this purpose, follow the guidelines
+    in the README file of the repository related to creating the environment.
     """
 
-    def __init__(self, client_id: int, accessible_percentage: int = 100,
-                 obs_data_size: int = 30000, int_data_size: int = 2000,
-                 num_vars: int = 20, num_clients: int = 5, graph_type: str = "full",
-                 seed: int = 0, num_categs: int = 10, edge_prob: float or None = None,
-                 external_dataset_dag: CausalDAGDataset or None = None):
-        """
-        Initialize a ENCO Algorithm class.
+    def __init__(self, client_id: int, external_dataset_dag: CausalDAGDataset,
+                 accessible_percentage: int = 100, num_clients: int = 5,
+                 int_variables: List[int] or None = None):
+        """ Initialize a ENCO Algorithm class.
 
-        Note: Before running this function, you have to make sure that conda environment related to
-        ENCO algorithm is up and running (named enco). For this purpose, follow the guidelines
-        in the README file of the repository related to creating the environment.
+        Args:
+            client_id (int): The unique identifier for the client using this learning module.
+            external_dataset_dag (CausalDAGDataset): The global dataset that all the clients have
+                access to.
+
+            accessible_percentage (int, optional): The portion of local share accessible to a client.
+                Defaults to 100.
+
+            num_clients (int, optional): Total number of clients in the global setup. Defaults to 5.
+            int_variables (List[int]orNone, optional): A list of variables for which interventional
+                samples are available. Defaults to None.
+
+        Raises:
+            ValueError: Check if global dataset is loaded.
         """
 
         super().__init__()
-        # Define a orientation mat
+
+        # Define orientation and existence mat
         self.inferred_orientation_mat: np.ndarray = np.ndarray([0])
+        self.original_adjacency_mat: np.ndarray = np.ndarray([0])
+        self.inferred_existence_mat: np.ndarray = np.ndarray([0])
+
         self.metrics_dict = dict()
-        self.prior_metrics_dict = dict()
+        self.metrics_dict_acycle = dict()
 
         # Initialize federated properties
-        self._client_id = client_id
-        self._accessible_p = accessible_percentage
+        self.__client_id = client_id
+        self.__accessible_p = accessible_percentage
+        self.__int_variables = int_variables
+
+        if not torch.cuda.is_available():
+            logger.warning('Cuda GPU is not available, running on cpu is extremely slow!')
 
         # Initialize the global dataset
-        if external_dataset_dag is not None:
-            self.original_adjacency_mat = external_dataset_dag.adj_matrix
-            self._data = external_dataset_dag.data_obs
-            self._data_int = external_dataset_dag.data_int
+        if external_dataset_dag is None:
+            raise ValueError('The global dataset is not loaded!')
 
-            logger.info(f'Client {self._client_id} external dataset loaded')
-            self._build_local_dataset(num_clients, external_dataset_dag.adj_matrix.shape[0])
+        self.original_adjacency_mat = external_dataset_dag.adj_matrix.astype(int)
+        self.__data = external_dataset_dag.data_obs
+        self.__data_int = external_dataset_dag.data_int
 
-        else:
-            logger.info(f'Client {self._client_id} building global dataset')
-            self.ـbuild_global_dataset(obs_data_size, int_data_size, num_vars,
-                                       graph_type, seed, num_categs, edge_prob=edge_prob)
+        logger.info(f'Client {self.__client_id} external dataset loaded')
+        self.build_local_dataset(num_clients, external_dataset_dag.adj_matrix.shape[0])
 
-            self._build_local_dataset(num_clients, len(self._graph.variables))
+    def build_local_dataset(self, num_clients: int, num_vars: int):
+        """ Build the local dataset for an specific client.
 
-    def ـbuild_global_dataset(self, obs_data_size: int, int_data_size: int, num_vars: int,
-                              graph_type: str, seed: int = 0, num_categs: int = 10,
-                              edge_prob: float or None = None):
+        Args:
+            num_clients (int): The total number of clients in the setup.
+            num_vars (int): The number of underlying graph nodes.
         """
-        The function builds a graph and an external dataset using soft intervention and
+
+        data_length = (self.__data.shape[0] // num_clients)
+        start_index = data_length * (self.__client_id)
+
+        data_length_acc = int(data_length * (self.__accessible_p / 100))
+        end_index = start_index + data_length_acc
+
+        local_obs_data = self.__data[start_index: end_index]
+        logger.info(f'Client {self.__client_id}: Shape of the local observational data: {local_obs_data.shape}')
+
+        local_int_data: np.ndarray = None
+        for var_idx in range(num_vars):
+            data_length = (self.__data_int.shape[1] // num_clients)
+            start_index = data_length * (self.__client_id)
+
+            data_length_acc = int(data_length * (self.__accessible_p / 100))
+            end_index = start_index + data_length_acc
+
+            int_sample = self.__data_int[var_idx][start_index: end_index]
+
+            local_int_data = np.array([int_sample]) if local_int_data is None \
+                                                    else np.append(local_int_data,
+                                                                   np.array([int_sample]),
+                                                                   axis=0)
+        logger.info(f'Client {self.__client_id}: Shape of the local interventional data: {local_int_data.shape}')
+
+        excluded_variables = [var_idx for var_idx in range(num_vars) if var_idx not in self.__int_variables]
+        logger.info(f'Client {self.__client_id}: Excluding following variables: {excluded_variables}\n')
+
+        self._local_dag_dataset = CausalDAGDataset(self.original_adjacency_mat,
+                                                   local_obs_data,
+                                                   local_int_data,
+                                                   exclude_inters=excluded_variables)
+
+    def infer_causal_structure(self, gamma_belief: np.ndarray or None,
+                               theta_belief: np.ndarray or None, num_epochs: int = 2,
+                               gpu_name: str = 'cuda:0', cache: os.DirEntry = None):
+        """This function calls an inference algorithm using ENCO core functions and class,
+        given a dataset_dag.
+
+        The parameters may be set here, or leave them to the default values instead.
+        For more information, refer to ENCO github page.
+
+        Args:
+            gamma_belief (np.ndarray or None): The prior information on edge existence.
+            theta_belief (np.ndarray or None): The prior information on edge orientation.
+            num_epochs (int, optional): Total number of epochs for ENCO. Defaults to 2.
+            gpu_name (str, optional): In case the enco should be passed to another gpu.
+                Defaults to cuda:0.
+            cache (os.DirEntry, optional): For keeping track of data during concurrency.
+        """
+
+        logger.info(f'Client {self.__client_id} started the inference process')
+        enco_module = ENCO(graph=self._local_dag_dataset, prior_gamma=gamma_belief,
+                           prior_theta=theta_belief)
+
+        if torch.cuda.is_available():
+            enco_module.to(torch.device(gpu_name))
+
+        enco_module.discover_graph(num_epochs=num_epochs)
+
+        self.inferred_orientation_mat = enco_module.get_theta_matrix()
+        self.inferred_existence_mat = enco_module.get_gamma_matrix()
+        self.binary_adjacency_mat = ((enco_module.get_binary_adjmatrix()).detach().numpy()).astype(int)
+        self.metrics_dict = enco_module.get_metrics(enforce_acyclic_graph=False)
+        self.metrics_dict_acycle = enco_module.get_metrics(enforce_acyclic_graph=True)
+
+        self.save_results(cache)
+        torch.cuda.empty_cache()
+
+        logger.info(f'Client {self.__client_id} finished the inference process')
+
+    def save_results(self, cache):
+        if cache is not None:
+            with open(cache, 'wb') as f:
+                pickle.dump(self.inferred_orientation_mat, f)
+                pickle.dump(self.inferred_existence_mat, f)
+                pickle.dump(self.binary_adjacency_mat, f)
+                pickle.dump(self.metrics_dict, f)
+                pickle.dump(self.metrics_dict_acycle, f)
+
+    def retrieve_results(self, cache):
+        with open(cache, 'rb') as f:
+            self.inferred_orientation_mat = pickle.load(f)
+            self.inferred_existence_mat = pickle.load(f)
+            self.binary_adjacency_mat = pickle.load(f)
+            self.metrics_dict = pickle.load(f)
+            self.metrics_dict_acycle = pickle.load(f)
+
+    def get_client_id(self):
+        """ Getter for client id.
+
+        Returns:
+            int: the client id
+        """
+        return self.__client_id
+
+    def get_accessible_percentage(self):
+        """ Getter for the accessible percentage of dataset
+
+        Returns:
+            int: the accessible_p variable
+        """
+        return self.__accessible_p
+
+    def get_interventions_list(self):
+        """ Getter for enforced interventions.
+
+        Returns:
+            List[int]: variable ids
+        """
+        return self.__int_variables
+
+    @staticmethod
+    def build_global_dataset(obs_data_size: int, int_data_size: int, num_vars: int,
+                             graph_type: str, seed: int = 0, num_categs: int = 10,
+                             edge_prob: float or None = None) -> CausalDAGDataset:
+        """The function builds a graph and an external dataset using soft intervention and
         online sampling from the respective graph.
+
+        Args:
+            obs_data_size (int): Size of observational samples.
+            int_data_size (int): Size of interventional samples.
+            num_vars (int): Number of variables in the graph.
+            graph_type (str): Graph type accoring to what is accessible by ENCO now.
+            seed (int, optional): Random seed. Defaults to 0.
+            num_categs (int, optional): Number of categories for categorical data. Defaults to 10.
+
+            edge_prob (floatorNone, optional): Edge probability in case the graph is defined as "random".
+            Defaults to None.
+
+        Returns:
+            CausalDAGDataset: A global dataset for other clients to sample from.
         """
 
-        self._graph = generate_categorical_graph(num_vars=num_vars,
-                                                 min_categs=num_categs,
-                                                 max_categs=num_categs,
-                                                 use_nn=True,
-                                                 graph_func=get_graph_func(graph_type),
-                                                 edge_prob=edge_prob,
-                                                 seed=seed)
-        logger.info(f'Client {self._client_id}: Graph is built with the provided information: \n {self._graph}')
+        assert graph_type in ["chain", "bidiag", "random", "full", "jungle", "collider"], "Graph not defined."
+        graph: CausalDAG = generate_categorical_graph(num_vars=num_vars,
+                                                      min_categs=num_categs,
+                                                      max_categs=num_categs,
+                                                      use_nn=True,
+                                                      graph_func=get_graph_func(graph_type),
+                                                      edge_prob=edge_prob,
+                                                      seed=seed)
+        logger.debug(f'Graph is built with the provided information: \n {graph}')
 
-        self.original_adjacency_mat = self._graph.adj_matrix
-        logger.info(f'Client {self._client_id}: Global dataset adjacency matrix: \n {self.original_adjacency_mat}')
+        original_adjacency_mat = graph.adj_matrix
+        logger.debug(f'Global dataset adjacency matrix: \n {original_adjacency_mat.astype(int)}')
 
-        self._data = self._graph.sample(batch_size=obs_data_size, as_array=True)
-        logger.info(f'Client {self._client_id}: Shape of observational data: {self._data.shape}')
+        data_obs = graph.sample(batch_size=obs_data_size, as_array=True)
+        logger.info(f'Shape of global observational data: {data_obs.shape}')
 
-        self._data_int = self._sample_int_data(int_data_size)
-        logger.info(f'Client {self._client_id}: Shape of interventional data: {self._data_int.shape}')
+        data_int = ENCOAlg.sample_int_data(graph, int_data_size)
+        logger.info(f'Shape of global interventional data: {data_int.shape}\n')
 
-        self.global_dataset_dag = CausalDAGDataset(self.original_adjacency_mat,
-                                                   self._data, self._data_int)
+        return CausalDAGDataset(original_adjacency_mat, data_obs, data_int)
 
-    def _sample_int_data(self, int_data_size: int):
-        """
-        Build an interventional dataset based on the provided parameters.
+    @staticmethod
+    def sample_int_data(graph: CausalDAG, int_data_size: int):
+        """ Build an interventional dataset based on the provided parameters.
+
+
+        Args:
+            graph (CausalDAG): The graph for sampling interventins.
+            int_data_size (int): Number of samples for interventional data.
+
+        Returns:
+            np.ndarray: The interventional dataset.
         """
         data_int: np.ndarray = None
 
-        for var_idx in range(len(self._graph.variables)):
+        for var_idx in range(len(graph.variables)):
 
             # Select variable to intervene on
-            var = self._graph.variables[var_idx]
+            var = graph.variables[var_idx]
 
             # Soft, perfect intervention => replace p(X_n) by random categorical
             # Scale is set to 0.0, which represents a uniform distribution.
             int_dist = _random_categ(size=(var.prob_dist.num_categs,), scale=0.0, axis=-1)
 
-            size = (int_data_size // len(self._graph.variables)) + 1
+            size = (int_data_size // len(graph.variables))
             # Sample from interventional distribution
             value = np.random.multinomial(n=1, pvals=int_dist,
                                         size=(size,))
             value = np.argmax(value, axis=-1)
 
             intervention_dict = {var.name: value}
-            int_sample = self._graph.sample(interventions=intervention_dict,
-                                            batch_size=size,
-                                            as_array=True)
+            int_sample = graph.sample(interventions=intervention_dict,
+                                      batch_size=size, as_array=True)
 
             data_int = np.array([int_sample]) if data_int is None \
                                               else np.append(data_int,
                                                               np.array([int_sample]),
                                                               axis=0)
         return data_int
-
-    def _build_local_dataset(self, num_clients: int, num_vars: int):
-        """
-        Build the local dataset for an specific client.
-        """
-
-        if len(self._data) == 0 or len(self._data_int) == 0:
-            logger.error(f'Client {self._client_id}: Initialize a global dataset first!')
-            return
-
-        data_length = (self._data.shape[0] // num_clients)
-        start_index = data_length * (self._client_id)
-
-        data_length_acc = int(data_length * (self._accessible_p / 100))
-        end_index = start_index + data_length_acc - 1
-
-        local_obs_data = self._data[start_index: end_index]
-        logger.info(f'Client {self._client_id}: Shape of the local observational data: {local_obs_data.shape}')
-
-
-        local_int_data: np.ndarray = None
-        for var_idx in range(num_vars):
-
-            data_length = (self._data_int.shape[1] // num_clients)
-            start_index = data_length * (self._client_id)
-
-            data_length_acc = int(data_length * (self._accessible_p / 100))
-            end_index = start_index + data_length_acc - 1
-
-            int_sample = self._data_int[var_idx][start_index: end_index]
-
-            local_int_data = np.array([int_sample]) if local_int_data is None \
-                                                    else np.append(local_int_data,
-                                                                   np.array([int_sample]),
-                                                                   axis=0)
-
-        logger.info(f'Client {self._client_id}: Shape of the local interventional data: {local_int_data.shape}')
-
-        self._local_dag_dataset = CausalDAGDataset(self.original_adjacency_mat,
-                                                   local_obs_data,
-                                                   local_int_data)
-
-    def infer_causal_structure(self, gamma_belief: str or None = None,
-                               theta_belief: str or None = None, num_epochs: int = 10,
-                               round_id: int = 0, experiment_id: int = 0):
-        """
-        This function calls an inference algorithm using ENCO core functions and class, given a dataset_dag.
-
-        The parameters may be set here, or leave them to the default values instead.
-        For more information, refer to ENCO github page.
-        """
-        logger.info(f'Client {self._client_id} started the inference process')
-
-        enco_module = ENCO(graph=self._local_dag_dataset, prior_gamma=gamma_belief,
-                           prior_theta=theta_belief)
-        self.prior_metrics_dict = enco_module.get_metrics()
-
-        if torch.cuda.is_available():
-            gpu_name = 'cuda:0'
-            enco_module.to(torch.device(gpu_name))
-
-        enco_module.discover_graph(num_epochs=num_epochs)
-        self.inferred_orientation_mat = enco_module.get_theta_matrix()
-        self.inferred_adjacency_mat = enco_module.get_gamma_matrix()
-        self.metrics_dict = enco_module.get_metrics()
-
-        logger.info(f'Client {self._client_id} finished the inference process')
-
-    def get_client_id(self):
-        """Getter for client id.
-
-        Returns:
-            int: the client id
-        """
-        return self._client_id
-
-    def get_accessible_percentage(self):
-        """Getter for the accessible percentage of dataset
-
-        Returns:
-            int: the accessible_p variable
-        """
-        return self._accessible_p
-
