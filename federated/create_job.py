@@ -18,9 +18,6 @@ output = {2}
 log = {3}
 queue {4}'''
 
-# request_memory = 4096
-# request_cpus = 4
-# request_gpus = 1
 
 GPU_NAMES = {
     '2080': 'GeForce RTX 2080 Ti',
@@ -171,7 +168,7 @@ def main(argv=None):
             print('Found {cm} commands, will submit {num} replicas'.format(cm=len(cmds), num=args.queue))
             for i in range(args.queue):
                 jpath = os.path.join(path, 'job_{}.sh'.format(i))
-                write_job([args.cmd + " " + str(i) + '\n'], jpath, name=args.name + ' - process: {}'.format(i), cddir=args.dir, tmpl=job_template if args.use_template else None)
+                write_job([args.cmd + " -eid " + str(i) + '\n'], jpath, name=args.name + ' - process: {}'.format(i), cddir=args.dir, tmpl=job_template if args.use_template else None)
 
             job_path = os.path.join(path, 'job_$(Process).sh')
 

@@ -24,6 +24,7 @@
 # ========================================================================
 
 import sys
+import argparse
 import numpy as np
 
 from federated_simulation import FederatedSimulator
@@ -31,10 +32,13 @@ from logging_settings import logger
 from utils import split_variables_set
 
 
-def parallel_experiments_sweep_clients_str():
+global PROCESS_ID
+
+
+def parallel_experiments_sweep_clients_str(nodiv: bool = True):
     """ A method to handle parallel MPI cluster experiments.
     """
-    process = int(str(sys.argv[1]))
+    process = PROCESS_ID
     logger.info(f'Starting the experiment sequence for process {process}\n')
 
     # Id
@@ -56,11 +60,11 @@ def parallel_experiments_sweep_clients_str():
     for graph_type in graph_types:
         for idx, num_client in enumerate(num_clients):
             logger.info(f'NUMBER OF SAMPLES: {specifier}- NUMBER OF CLIENTS: {num_client}')
-            
+
             obs_data_size = obs_sample_size * num_client
-            int_data_size = specifier * num_vars
+            int_data_size = specifier * num_vars * num_client if nodiv else specifier * num_vars
             interventions_dict = {cid: [v for v in range(num_vars)] for cid in range(num_client)}
-            folder_name = f'ClientSweep-{graph_type}-{num_vars}-{specifier}'
+            folder_name = f'ClientSweepNodiv-{graph_type}-{num_vars}-{specifier}' if nodiv else f'ClientSweepDiv-{graph_type}-{num_vars}-{specifier}'
 
             for seed in range(repeat_count):
                 federated_model = FederatedSimulator(interventions_dict, num_clients=num_client,
@@ -75,11 +79,10 @@ def parallel_experiments_sweep_clients_str():
 
     logger.info(f'Ending the experiment sequence for process {process}\n')
 
-    
-def parallel_experiments_sweep_clients_rnd():
+def parallel_experiments_sweep_clients_rnd(nodiv: bool = True):
     """ A method to handle parallel MPI cluster experiments.
     """
-    process = int(str(sys.argv[1]))
+    process = PROCESS_ID
     logger.info(f'Starting the experiment sequence for process {process}\n')
 
     # Id
@@ -92,6 +95,7 @@ def parallel_experiments_sweep_clients_rnd():
 
     # Graph
     num_vars = 20
+    obs_sample_size = 15000
     graph_types = [0.1, 0.2, 0.4, 0.6, 0.8]
     specifiers = [12, 24, 48, 96, 144, 192, 240]
     specifier = specifiers[experiment_id]
@@ -100,10 +104,10 @@ def parallel_experiments_sweep_clients_rnd():
     for graph_type in graph_types:
         for idx, num_client in enumerate(num_clients):
             logger.info(f'NUMBER OF SAMPLES: {specifier}- NUMBER OF CLIENTS: {num_client}')
-            obs_data_size = graph_type * 15000 * num_client
-            int_data_size = specifier * num_vars * num_client
+            obs_data_size = graph_type * obs_sample_size * num_client
+            int_data_size = specifier * num_vars * num_client if nodiv else specifier * num_vars
             interventions_dict = {cid: [v for v in range(num_vars)] for cid in range(num_client)}
-            folder_name = f'ClientSweepNODIV-{graph_type}-{num_vars}-{specifier}'
+            folder_name = f'ClientSweepNodiv-{graph_type}-{num_vars}-{specifier}' if nodiv else f'ClientSweepDiv-{graph_type}-{num_vars}-{specifier}'
 
             for seed in range(repeat_count):
                 federated_model = FederatedSimulator(interventions_dict, num_clients=num_client,
@@ -118,10 +122,11 @@ def parallel_experiments_sweep_clients_rnd():
 
     logger.info(f'Ending the experiment sequence for process {process}\n')
 
-def parallel_experiments_enco_balanced_str():
+
+def parallel_experiments_balanced_int_str():
     """ A method to handle parallel MPI cluster experiments.
     """
-    process = int(str(sys.argv[1]))
+    process = PROCESS_ID
     logger.info(f'Starting the experiment sequence for process {process}\n')
 
     # Id
@@ -170,11 +175,11 @@ def parallel_experiments_enco_balanced_str():
 
     logger.info(f'Ending the experiment sequence for process {process}\n')
 
-    
-def parallel_experiments_enco_balanced_int_rnd():
+
+def parallel_experiments_balanced_int_rnd():
     """ A method to handle parallel MPI cluster experiments.
     """
-    process = int(str(sys.argv[1]))
+    process = PROCESS_ID
     logger.info(f'Starting the experiment sequence for process {process}\n')
 
     # Id
@@ -203,7 +208,7 @@ def parallel_experiments_enco_balanced_int_rnd():
         data_weight = 2
 
     interventions_dict = {cid: [v for v in range(num_vars)] for cid in range(num_client)}
-    
+
     graph_type = "random"
     for specifier in specifiers:
         for idx, edge_prob in enumerate(edge_probs):
@@ -225,10 +230,10 @@ def parallel_experiments_enco_balanced_int_rnd():
     logger.info(f'Ending the experiment sequence for process {process}\n')
 
 
-def parallel_experiments_toy_str():
+def parallel_experiments_unbalanced_int_str():
     """ A method to handle parallel MPI cluster experiments.
     """
-    process = int(str(sys.argv[1]))
+    process = PROCESS_ID
     logger.info(f'Starting the experiment sequence for process {process}\n')
 
     # Id
@@ -273,10 +278,10 @@ def parallel_experiments_toy_str():
     logger.info(f'Ending the experiment sequence for process {process}\n')
 
 
-def parallel_experiments_toy_rnd():
+def parallel_experiments_unbalanced_int_rnd():
     """ A method to handle parallel MPI cluster experiments.
     """
-    process = int(str(sys.argv[1]))
+    process = PROCESS_ID
     logger.info(f'Starting the experiment sequence for process {process}\n')
 
     # Id
@@ -323,10 +328,10 @@ def parallel_experiments_toy_rnd():
     logger.info(f'Ending the experiment sequence for process {process}\n')
 
 
-def parallel_experiments_toy_rnd_test_alpha():
+def parallel_experiments_sweep_alpha():
     """ A method to handle parallel MPI cluster experiments.
     """
-    process = int(str(sys.argv[1]))
+    process = PROCESS_ID
     logger.info(f'Starting the experiment sequence for process {process}\n')
 
     # Id
@@ -428,6 +433,142 @@ def get_datasets_size_naive(graph_type: str, num_clients: int, num_vars: int):
     return obs_data_sizes, int_data_sizes
 
 
+def parallel_experiments_entropy_test_str():
+    """ A method to handle parallel MPI cluster experiments.
+    """
+    process = PROCESS_ID
+    logger.info(f'Starting the experiment sequence for process {process}\n')
+
+    # Id
+    experiment_id = process
+    repeat_count = 5
+
+    # Federated
+    num_rounds = 10
+
+    # Graph
+    num_vars = 20
+    graph_types = ["jungle", "collider", "chain", "full", "bidiag"]
+
+    # Dataset
+    int_sample_sizes = [2, 2, 2, 4, 2]
+    obs_sample_sizes = [10000, 5000, 5000, 20000, 5000]
+    aggregation_method = "naive"
+
+    num_client = 10
+    data_weight = num_client
+
+    interventions_dict = {cid: [v for v in range(num_vars)] for cid in range(num_client)}
+
+    for idx, graph_type in enumerate(graph_types):
+        obs_data_size = obs_sample_sizes[idx] * data_weight
+        int_data_size = int_sample_sizes[idx] * data_weight * num_vars
+        folder_name = f'EntropyTest-{graph_type}-{num_vars}'
+
+        for seed in range(repeat_count):
+            federated_model = FederatedSimulator(interventions_dict, num_clients=num_client,
+                                                 num_rounds=num_rounds, experiment_id=experiment_id,
+                                                 repeat_id=seed, output_dir=folder_name)
+            federated_model.initialize_clients_data(num_vars=num_vars, graph_type=graph_type,
+                                                    obs_data_size=obs_data_size,
+                                                    int_data_size=int_data_size,
+                                                    seed=seed)
+            if aggregation_method == "naive":
+                federated_model.execute_simulation(aggregation_method=aggregation_method)
+
+    logger.info(f'Ending the experiment sequence for process {process}\n')
+
+
+def parallel_experiments_entropy_test_rnd():
+    """ A method to handle parallel MPI cluster experiments.
+    """
+    process = PROCESS_ID
+    logger.info(f'Starting the experiment sequence for process {process}\n')
+
+    # Id
+    experiment_id = process
+    repeat_count = 5
+
+    # Federated
+    num_rounds = 10
+
+    # Graph
+    num_vars = 20
+    graph_types = [0.1, 0.2, 0.4, 0.6, 0.8]
+
+    # Dataset
+    obs_sample_size = 15000
+    int_sample_size = 10
+    aggregation_method = "naive"
+
+    num_client = 10
+    data_weight = num_client
+
+    interventions_dict = {cid: [v for v in range(num_vars)] for cid in range(num_client)}
+
+    for idx, graph_type in enumerate(graph_types):
+        obs_data_size = int(obs_sample_size * graph_type) * data_weight
+        int_data_size = int(int_sample_size * graph_type) * data_weight * num_vars
+        folder_name = f'EntropyTest-{graph_type}-{num_vars}'
+
+        for seed in range(repeat_count):
+            federated_model = FederatedSimulator(interventions_dict, num_clients=num_client,
+                                                 num_rounds=num_rounds, experiment_id=experiment_id,
+                                                 repeat_id=seed, output_dir=folder_name)
+            federated_model.initialize_clients_data(num_vars=num_vars, graph_type=graph_type,
+                                                    obs_data_size=obs_data_size,
+                                                    int_data_size=int_data_size,
+                                                    seed=seed)
+            if aggregation_method == "naive":
+                federated_model.execute_simulation(aggregation_method=aggregation_method)
+
+    logger.info(f'Ending the experiment sequence for process {process}\n')
+
 if __name__ == '__main__':
-    parallel_experiments_toy_rnd()
+    parser = argparse.ArgumentParser(description='Federated causal inference experiments on Tuebingen cluster. Note that there is an option for running the experiments on a local machine but is not recommended due to computational complexity of the experiments.')
+
+    parser.add_argument("-et", "--exp-type", default="balanced_interventions", type=str,
+        help="Type of experiment from: client_sweep, balanced_interventions, unbalanced_interventions, propagation_coeff_effect, and entropy_test.")
+    parser.add_argument("-gt", "--graph-type", default="str", type=str,
+        help="Graph type for the experiments. Could be either str (structured) or rnd (random) graphs.")
+    parser.add_argument("-eid", "--experiment-id", default=0, type=int,
+        help="Experiment id passed by cluster scripts (create_job.py) or manually by the user.")
+
+    args = parser.parse_args()
+
+    PROCESS_ID = args.experiment_id
+
+    if args.exp_type == "balanced_interventions":
+        if args.graph_type == "str":
+            parallel_experiments_balanced_int_str()
+        elif args.graph_type == "rnd":
+            parallel_experiments_balanced_int_rnd()
+
+    elif args.exp_type == "unbalanced_interventions":
+        if args.graph_type == "str":
+            parallel_experiments_unbalanced_int_str()
+        elif args.graph_type == "rnd":
+            parallel_experiments_unbalanced_int_rnd()
+
+    elif args.exp_type == "client_sweep_nodiv":
+        if args.graph_type == "str":
+            parallel_experiments_sweep_clients_str(nodiv=True)
+        elif args.graph_type == "rnd":
+            parallel_experiments_sweep_clients_rnd(nodiv=True)
+
+    elif args.exp_type == "client_sweep_div":
+        if args.graph_type == "str":
+            parallel_experiments_sweep_clients_str(nodiv=False)
+        elif args.graph_type == "rnd":
+            parallel_experiments_sweep_clients_rnd(nodiv=False)
+
+    elif args.exp_type == "propagation_coeff_effect":
+        parallel_experiments_sweep_alpha()
+
+    elif args.exp_type == "entropy_test":
+        if args.graph_type == "str":
+            parallel_experiments_entropy_test_str()
+        elif args.graph_type == "rnd":
+            parallel_experiments_entropy_test_rnd()
+
 
