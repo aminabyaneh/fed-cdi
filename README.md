@@ -10,18 +10,23 @@ Moreover, privacy is an indisputably crucial matter to the world of causal infer
 
 ## Getting started
 
-Here are some quick instructions about getting familiarized with Pyfectious environment and capabilities.
+Here are some quick instructions about getting familiarized with the repository environment.
 
 ### General structure
 
 To acquire a better understanding of the environment and features, you just need to clone the repository into your local machine. At first glance, the overall structure of the project appears below.
 
-    ├── src          # Python source files of the project.
-    ├── cluster      # Tools and scripts to run on the cluster.
-    ├── data         # Simulator's database and configuration files.
-    ├── requirements.txt
+    ├── federated          # Python source files related to the federated setup.
+    ├── baselines          # Libraries for baselining our federated method.
+    ├── data               # Simulator's database and configuration files.
+    ├── environment.yml    # Required libs and packages.
     ├── LICENSE
     └── README.md
+
+Other folders are libraries related to our local learning method and thus are not the main focus of this repository.
+
+### Main simulation file
+To run a simulation, you can use the federated simulation file inside the federated folder. Further instructions will be uploaded here upon final release.
 
 ## Contributing
 
