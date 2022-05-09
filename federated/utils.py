@@ -26,7 +26,6 @@
 import glob
 import os.path
 import random
-import itertools
 
 from typing import List, Dict, Tuple
 from networkx.algorithms.shortest_paths.generic import shortest_path
@@ -41,8 +40,9 @@ from logging_settings import logger
 DEFAULT_OBSERVATION_SIZE = 5000
 
 
-def split_variables_set(num_vars, accessible_percentages, seed=0):
+def split_variables_set(num_vars: int, accessible_percentages: List, seed=0):
     """Split a set of variables based on accessible percentages.
+    The output is disjoint in this case.
 
     Args:
         num_vars (int): Total number of variables.

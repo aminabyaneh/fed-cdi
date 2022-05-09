@@ -23,6 +23,7 @@
 # limitations under the License.
 # ========================================================================
 
+from re import split
 import sys
 import argparse
 import numpy as np
@@ -328,7 +329,7 @@ def parallel_experiments_unbalanced_int_rnd():
     logger.info(f'Ending the experiment sequence for process {process}\n')
 
 
-def parallel_experiments_sweep_alpha():
+def parallel_experiments_compare_aggregations(graph_type: str = 'random'):
     """ A method to handle parallel MPI cluster experiments.
     """
     process = PROCESS_ID
@@ -336,43 +337,42 @@ def parallel_experiments_sweep_alpha():
 
     # Id
     experiment_id = process
+    specifiers = ["locality", "naive"]
     accessible_percentages = [10, 90]
-    specifier = f'alpha-aps-{accessible_percentages[0]}-{accessible_percentages[1]}'
+    assert process < len(specifiers), f'More jobs than required, no need for process {process}!'
 
     # Graph
-    graph_type = "random"
-    edge_probs = [0.1, 0.2, 0.4, 0.6, 0.8, 1.0]
-    num_vars = 20
+    graph_type = 'random'
+    edge_prob = 0.4
+    num_vars = 50
 
     # Federated
     num_rounds = 10
-    num_clients = [1, 1, 2]
-    alphas = [0.1, 0.3, 0.5, 0.7]
+    num_clients = 10
+    alpha = 0.5
     repeat = 5
 
-    for edge_prob in edge_probs:
-        obs_data_size, int_data_size = get_datasets_size_locality(graph_type, num_clients[experiment_id],
-                                                                  num_vars, edge_prob)
-        for alpha in alphas:
-            folder_name = f'ToySetup-{edge_prob}-{num_vars}-{specifier}-{alpha}'
-            for seed in range(repeat):
-                splits = split_variables_set(num_vars, accessible_percentages, seed)
-                interventions_dict = [{0: splits[0]}, {0: splits[1]}, # Single client setup
-                                      {0: splits[0], 1: splits[1]}] # Federated collaboration
+    obs_data_size, int_data_size = get_datasets_size_locality(graph_type, num_clients, num_vars, edge_prob)
+    folder_name = f'AggComparison-{edge_prob}-{num_vars}-{specifiers[experiment_id]}-{alpha}'
 
-                federated_model = FederatedSimulator(interventions_dict[experiment_id],
-                                                    num_clients=num_clients[experiment_id],
-                                                    num_rounds=num_rounds, experiment_id=experiment_id,
-                                                    repeat_id=seed, output_dir=folder_name)
+    for seed in range(repeat):
+        splits = split_variables_set(num_vars, accessible_percentages, seed)
+        logger.info(f'The interventional variables split is {splits}.')
+        interventions_dict = {client_idx: splits[int(client_idx >= 2)] for client_idx in range(num_clients)}
 
-                federated_model.initialize_clients_data(num_vars=num_vars, graph_type=graph_type,
-                                                        obs_data_size=obs_data_size,
-                                                        int_data_size=int_data_size,
-                                                        edge_prob=edge_prob, seed=seed)
+        federated_model = FederatedSimulator(interventions_dict[experiment_id],
+                                             num_clients=num_clients[experiment_id],
+                                             num_rounds=num_rounds, experiment_id=experiment_id,
+                                             repeat_id=seed, output_dir=folder_name)
 
-                federated_model.execute_simulation(aggregation_method="locality",
-                                                initial_mass=np.array([16, 16]),
-                                                alpha=alpha, beta=0.3, min_mass=1)
+        federated_model.initialize_clients_data(num_vars=num_vars, graph_type=graph_type,
+                                                obs_data_size=obs_data_size,
+                                                int_data_size=int_data_size,
+                                                edge_prob=edge_prob, seed=seed)
+
+        federated_model.execute_simulation(aggregation_method="locality",
+                                           initial_mass=np.array([16, 16]),
+                                           alpha=alpha, beta=0.3, min_mass=1)
 
     logger.info(f'Ending the experiment sequence for process {process}\n')
 
@@ -525,14 +525,20 @@ def parallel_experiments_entropy_test_rnd():
     logger.info(f'Ending the experiment sequence for process {process}\n')
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Federated causal inference experiments on Tuebingen cluster. Note that there is an option for running the experiments on a local machine but is not recommended due to computational complexity of the experiments.')
+    parser = argparse.ArgumentParser(description='Federated causal inference experiments on Tuebingen cluster. '
+    'Note that there is an option for running the experiments on a local machine but is not recommended due '
+    'to computational complexity of the experiments.')
 
     parser.add_argument("-et", "--exp-type", default="balanced_interventions", type=str,
-        help="Type of experiment from: client_sweep, balanced_interventions, unbalanced_interventions, propagation_coeff_effect, and entropy_test.")
+        help='Type of experiment from: client_sweep, balanced_interventions, compare_aggregations, '
+        'unbalanced_interventions, and entropy_test.')
+
     parser.add_argument("-gt", "--graph-type", default="str", type=str,
         help="Graph type for the experiments. Could be either str (structured) or rnd (random) graphs.")
     parser.add_argument("-eid", "--experiment-id", default=0, type=int,
         help="Experiment id passed by cluster scripts (create_job.py) or manually by the user.")
+    parser.add_argument("-at", "--aggregation-type", default="naive", type=str,
+        help="Type of aggregation: either naive or locality.")
 
     args = parser.parse_args()
 
@@ -550,6 +556,9 @@ if __name__ == '__main__':
         elif args.graph_type == "rnd":
             parallel_experiments_unbalanced_int_rnd()
 
+    elif args.exp_type == "compare_aggregations":
+        parallel_experiments_compare_aggregations()
+
     elif args.exp_type == "client_sweep_nodiv":
         if args.graph_type == "str":
             parallel_experiments_sweep_clients_str(nodiv=True)
@@ -561,9 +570,6 @@ if __name__ == '__main__':
             parallel_experiments_sweep_clients_str(nodiv=False)
         elif args.graph_type == "rnd":
             parallel_experiments_sweep_clients_rnd(nodiv=False)
-
-    elif args.exp_type == "propagation_coeff_effect":
-        parallel_experiments_sweep_alpha()
 
     elif args.exp_type == "entropy_test":
         if args.graph_type == "str":
