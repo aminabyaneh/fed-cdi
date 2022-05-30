@@ -152,5 +152,6 @@ federated/cluster/data*
 data/
 *.pickle
 baselines/dcdi/data*
+federated/cluster_data.zip
 
 

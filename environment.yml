@@ -1,4 +1,4 @@
-name: federated_cl
+name: fcd
 channels:
   - pytorch
   - nvidia

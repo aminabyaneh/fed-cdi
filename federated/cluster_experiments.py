@@ -36,6 +36,36 @@ from utils import split_variables_set
 global PROCESS_ID
 
 
+class ParallelExperiments:
+    def __init__(self, experiment_id: int, num_clients: int, num_vars: int, graph_type: str, num_rounds: int):
+        """ This class handles all the experiments depicted in the main paper and more.
+
+        TODO: Huge refactor later! Merge all the scattered methods and parameters into one class.
+
+        Args:
+            process_id (int): Process id is used for parallel execution if the jobs are handled by the cluster.
+            num_clients (int): Total number of clients in the federated setup.
+            num_vars (int): Number of variables of the underlying data generating graph.
+            graph_type (str): Type of the graphs under experiment: 'str' or 'rnd'.
+            num_rounds (int): Number of federated rounds.
+        """
+
+        self.__process_id = experiment_id
+        self.__num_clients = num_clients
+        self.__num_vars = num_vars
+        self.__graph_type = graph_type
+        self.__num_rounds = num_rounds
+
+        self.__str_graphs = ["collider", "bidiag", "full", "chain", "jungle"]
+        self.__rnd_graphs = [0.1, 0.2, 0.4, 0.6, 0.8]
+
+        self.__naive_aggregation = "naive"
+        self.__locality_aggregation = "locality"
+
+        self.__default_obs_data_size = 10000
+        self.__default_int_data_sizes = [12, 24, 48, 96, 144, 192, 240]
+
+
 def parallel_experiments_sweep_clients_str(nodiv: bool = True):
     """ A method to handle parallel MPI cluster experiments.
     """
@@ -329,7 +359,7 @@ def parallel_experiments_unbalanced_int_rnd():
     logger.info(f'Ending the experiment sequence for process {process}\n')
 
 
-def parallel_experiments_compare_aggregations(graph_type: str = 'random'):
+def parallel_experiments_compare_aggregations(clients_with_less_int_vars: int = 5):
     """ A method to handle parallel MPI cluster experiments.
     """
     process = PROCESS_ID
@@ -337,42 +367,43 @@ def parallel_experiments_compare_aggregations(graph_type: str = 'random'):
 
     # Id
     experiment_id = process
-    specifiers = ["locality", "naive"]
+    specifiers = [6, 12, 24, 48, 96, 144, 192, 240]
     accessible_percentages = [10, 90]
-    assert process < len(specifiers), f'More jobs than required, no need for process {process}!'
 
     # Graph
     graph_type = 'random'
-    edge_prob = 0.4
+    edge_probs = [0.1, 0.2, 0.4, 0.6, 0.8]
     num_vars = 50
 
     # Federated
     num_rounds = 10
     num_clients = 10
+    agg_methods = ["locality", "naive"]
     alpha = 0.5
     repeat = 5
 
-    obs_data_size, int_data_size = get_datasets_size_locality(graph_type, num_clients, num_vars, edge_prob)
-    folder_name = f'AggComparison-{edge_prob}-{num_vars}-{specifiers[experiment_id]}-{alpha}'
+    for edge_prob in edge_probs:
+        for agg_method in agg_methods:
+            obs_data_size, _ = get_datasets_size_locality(graph_type, num_clients, num_vars, edge_prob)
+            folder_name = f'AggComparison-{edge_prob}-{num_vars}-{agg_method}-{clients_with_less_int_vars}-{alpha}'
 
-    for seed in range(repeat):
-        splits = split_variables_set(num_vars, accessible_percentages, seed)
-        logger.info(f'The interventional variables split is {splits}.')
-        interventions_dict = {client_idx: splits[int(client_idx >= 2)] for client_idx in range(num_clients)}
+            for seed in range(repeat):
+                splits = split_variables_set(num_vars, accessible_percentages, seed)
+                logger.info(f'The interventional variables split is {splits}.')
+                interventions_dict = {client_idx: splits[int(client_idx >= clients_with_less_int_vars)] for client_idx in range(num_clients)}
 
-        federated_model = FederatedSimulator(interventions_dict[experiment_id],
-                                             num_clients=num_clients[experiment_id],
-                                             num_rounds=num_rounds, experiment_id=experiment_id,
-                                             repeat_id=seed, output_dir=folder_name)
+                federated_model = FederatedSimulator(interventions_dict, num_clients=num_clients,
+                                                    num_rounds=num_rounds, experiment_id=experiment_id,
+                                                    repeat_id=seed, output_dir=folder_name)
 
-        federated_model.initialize_clients_data(num_vars=num_vars, graph_type=graph_type,
-                                                obs_data_size=obs_data_size,
-                                                int_data_size=int_data_size,
-                                                edge_prob=edge_prob, seed=seed)
+                federated_model.initialize_clients_data(num_vars=num_vars, graph_type=graph_type,
+                                                        obs_data_size=obs_data_size,
+                                                        int_data_size=specifiers[experiment_id] * num_vars * num_clients,
+                                                        edge_prob=edge_prob, seed=seed)
 
-        federated_model.execute_simulation(aggregation_method="locality",
-                                           initial_mass=np.array([16, 16]),
-                                           alpha=alpha, beta=0.3, min_mass=1)
+                federated_model.execute_simulation(aggregation_method=agg_method,
+                                                initial_mass=np.array([2 for _ in range(num_clients)]),
+                                                alpha=alpha, beta=0.3, min_mass=0.00001)
 
     logger.info(f'Ending the experiment sequence for process {process}\n')
 
@@ -393,42 +424,6 @@ def get_datasets_size_locality(graph_type: str, num_clients: int, num_vars: int,
     if graph_type == 'random':
         obs_data_sizes = edge_prob * 20000 * num_clients
         int_data_sizes = 200 * num_vars * num_clients
-
-    return obs_data_sizes, int_data_sizes
-
-
-def get_datasets_size_naive(graph_type: str, num_clients: int, num_vars: int):
-    """ Chain graph sample sizes """
-    if graph_type == 'chain':
-        obs_data_sizes = [260 * num_clients, 280 * num_clients, 300 * num_clients,
-                          320 * num_clients, 350 * num_clients, 370 * num_clients,
-                          390 * num_clients, 410 * num_clients, 430 * num_clients,
-                          450 * num_clients, 335 * num_clients, 500 * num_clients,]
-        int_data_sizes = [32 * (p * num_vars) * num_clients for p in [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]]
-
-    """ Jungle graph sample sizes """
-    if graph_type == 'jungle':
-        obs_data_sizes = [450 * num_clients, 550 * num_clients, 600 * num_clients,
-                          650 * num_clients, 700 * num_clients, 750 * num_clients,
-                          800 * num_clients, 850 * num_clients, 900 * num_clients,
-                          950 * num_clients, 1000 * num_clients, 1100 * num_clients,]
-        int_data_sizes = [32 * (p * num_vars) * num_clients for p in [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]]
-
-    """ Collider graph sample sizes """
-    if graph_type == 'collider':
-        obs_data_sizes = [500 * num_clients, 1000 * num_clients, 1500 * num_clients,
-                          2000 * num_clients, 2500 * num_clients, 3000 * num_clients,
-                          3500 * num_clients, 4000 * num_clients, 5000 * num_clients,
-                          6000 * num_clients, 7000 * num_clients, 8000 * num_clients]
-        int_data_sizes = [32 * (p * num_vars) * num_clients for p in range(1, 12 + 1)]
-
-    """ Full graph sample sizes """
-    if graph_type == 'full':
-        obs_data_sizes = [50000 * num_clients, 100000 * num_clients, 150000 * num_clients,
-                          200000 * num_clients, 250000 * num_clients, 300000 * num_clients,
-                          350000 * num_clients, 400000 * num_clients, 500000 * num_clients,
-                          600000 * num_clients, 700000 * num_clients, 800000 * num_clients]
-        int_data_sizes = [32 * (p * num_vars) * num_clients * 100 for p in range(1, 12 + 1)]
 
     return obs_data_sizes, int_data_sizes
 
@@ -533,12 +528,22 @@ if __name__ == '__main__':
         help='Type of experiment from: client_sweep, balanced_interventions, compare_aggregations, '
         'unbalanced_interventions, and entropy_test.')
 
-    parser.add_argument("-gt", "--graph-type", default="str", type=str,
+    parser.add_argument("-gt", "--graph-type", default="random", type=str,
         help="Graph type for the experiments. Could be either str (structured) or rnd (random) graphs.")
     parser.add_argument("-eid", "--experiment-id", default=0, type=int,
         help="Experiment id passed by cluster scripts (create_job.py) or manually by the user.")
     parser.add_argument("-at", "--aggregation-type", default="naive", type=str,
         help="Type of aggregation: either naive or locality.")
+
+    parser.add_argument("-gs", "--graph-size", default=20, type=int,
+        help="Size of the graph for underlying data generation process.")
+    parser.add_argument("-nc", "--num-clients", default=2, type=int,
+        help="Number of clients in the federated setup.")
+    parser.add_argument("-nr", "--num-rounds", default=10, type=int,
+        help="Total number of federated rounds, we recommend running for 10 or less.")
+
+    parser.add_argument("-lic", "--less-informed-clients", default=2, type=int,
+        help="Number of clients with access to only 10 percent of intervened variables. Can only be used with the compare_aggregations experiments.")
 
     args = parser.parse_args()
 
@@ -557,7 +562,7 @@ if __name__ == '__main__':
             parallel_experiments_unbalanced_int_rnd()
 
     elif args.exp_type == "compare_aggregations":
-        parallel_experiments_compare_aggregations()
+        parallel_experiments_compare_aggregations(clients_with_less_int_vars=args.less_informed_clients)
 
     elif args.exp_type == "client_sweep_nodiv":
         if args.graph_type == "str":
