@@ -359,7 +359,7 @@ def parallel_experiments_unbalanced_int_rnd():
     logger.info(f'Ending the experiment sequence for process {process}\n')
 
 
-def parallel_experiments_compare_aggregations(clients_with_less_int_vars: int = 5):
+def parallel_experiments_compare_aggregations(graph_size: int = 50, network_size: int = 10):
     """ A method to handle parallel MPI cluster experiments.
     """
     process = PROCESS_ID
@@ -368,42 +368,48 @@ def parallel_experiments_compare_aggregations(clients_with_less_int_vars: int = 
     # Id
     experiment_id = process
     specifiers = [6, 12, 24, 48, 96, 144, 192, 240]
-    accessible_percentages = [10, 90]
+
 
     # Graph
     graph_type = 'random'
     edge_probs = [0.1, 0.2, 0.4, 0.6, 0.8]
-    num_vars = 50
+    num_vars = graph_size
+
 
     # Federated
     num_rounds = 10
-    num_clients = 10
+    num_clients = network_size
     agg_methods = ["locality", "naive"]
     alpha = 0.5
     repeat = 5
+    initial_mass = 1
 
-    for edge_prob in edge_probs:
-        for agg_method in agg_methods:
-            obs_data_size, _ = get_datasets_size_locality(graph_type, num_clients, num_vars, edge_prob)
-            folder_name = f'AggComparison-{edge_prob}-{num_vars}-{agg_method}-{clients_with_less_int_vars}-{alpha}'
+    for n_acc_vars in [2]:
+        percentage = int((n_acc_vars / num_vars) * 100)
+        accessible_percentages = [percentage] * int(100 / percentage)
 
-            for seed in range(repeat):
-                splits = split_variables_set(num_vars, accessible_percentages, seed)
-                logger.info(f'The interventional variables split is {splits}.')
-                interventions_dict = {client_idx: splits[int(client_idx >= clients_with_less_int_vars)] for client_idx in range(num_clients)}
+        for edge_prob in edge_probs:
+            for agg_method in agg_methods:
+                obs_data_size, _ = get_datasets_size_locality(graph_type, num_clients, num_vars, edge_prob)
+                folder_name = f'AggComparison-{edge_prob}-{num_vars}-{agg_method}-{alpha}-{n_acc_vars}'
 
-                federated_model = FederatedSimulator(interventions_dict, num_clients=num_clients,
-                                                    num_rounds=num_rounds, experiment_id=experiment_id,
-                                                    repeat_id=seed, output_dir=folder_name)
+                for seed in range(repeat):
+                    splits = split_variables_set(num_vars, accessible_percentages, seed)
+                    logger.info(f'The interventional variables split is {splits}.')
+                    interventions_dict = {client_idx: splits[client_idx] for client_idx in range(num_clients)}
 
-                federated_model.initialize_clients_data(num_vars=num_vars, graph_type=graph_type,
-                                                        obs_data_size=obs_data_size,
-                                                        int_data_size=specifiers[experiment_id] * num_vars * num_clients,
-                                                        edge_prob=edge_prob, seed=seed)
+                    federated_model = FederatedSimulator(interventions_dict, num_clients=num_clients,
+                                                        num_rounds=num_rounds, experiment_id=experiment_id,
+                                                        repeat_id=seed, output_dir=folder_name)
 
-                federated_model.execute_simulation(aggregation_method=agg_method,
-                                                initial_mass=np.array([2 for _ in range(num_clients)]),
-                                                alpha=alpha, beta=0.3, min_mass=0.00001)
+                    federated_model.initialize_clients_data(num_vars=num_vars, graph_type=graph_type,
+                                                            obs_data_size=obs_data_size,
+                                                            int_data_size=specifiers[experiment_id] * num_vars * num_clients,
+                                                            edge_prob=edge_prob, seed=seed)
+
+                    federated_model.execute_simulation(aggregation_method=agg_method,
+                                                    initial_mass=np.array([initial_mass for _ in range(num_clients)]),
+                                                    alpha=alpha, beta=0.3, min_mass=0.00001)
 
     logger.info(f'Ending the experiment sequence for process {process}\n')
 
@@ -562,7 +568,7 @@ if __name__ == '__main__':
             parallel_experiments_unbalanced_int_rnd()
 
     elif args.exp_type == "compare_aggregations":
-        parallel_experiments_compare_aggregations(clients_with_less_int_vars=args.less_informed_clients)
+        parallel_experiments_compare_aggregations(args.graph_size, args.num_clients)
 
     elif args.exp_type == "client_sweep_nodiv":
         if args.graph_type == "str":
