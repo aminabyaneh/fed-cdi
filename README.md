@@ -42,11 +42,14 @@ Please use the following BibTeX formatted **citation**:
       year={2022}
     }
 
-## Authors
+## Developement
 
 * [Amin Abyaneh](https://github.com/aminabyaneh) -- **maintainer**
-* [Nino Scherrer] (https://github.com/ninodimontalcino)
+* [Nino Scherrer](https://github.com/ninodimontalcino)
 * [Arash Mehrjou](https://github.com/amehrjou)
+
+## Authors
+
 
 ## License
 
