@@ -142,14 +142,11 @@ causal_graphs/continuous_graphs/
 causal_graphs/exported_graphs.zip
 
 # Images
-*.png
 .gitignore
 *.pdf
 
 # Logs
 federated/cluster/logs*
-federated/cluster/data*
-data/
 *.pickle
 baselines/dcdi/data*
 
