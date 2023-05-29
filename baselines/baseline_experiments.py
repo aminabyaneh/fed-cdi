@@ -1,3 +1,14 @@
+"""
+    File name: baseline_experiments.py
+    Author: Amin Abyaneh
+    Email: aminabyaneh@gmail.com
+    Date created: 23/11/2021
+    Python Version: 3.8
+    Description: Using IGSP and GIES as baselines.
+
+    TODO: Refactor the file.
+"""
+
 import os
 import sys
 import pickle
@@ -5,14 +16,11 @@ import argparse
 import os
 import uuid
 
-import networkx as nx
 import numpy as np
 import pandas as pd
 
 from shutil import rmtree
-from cdt.causality.graph.model import GraphModel
-from cdt.utils.Settings import SETTINGS
-from cdt.utils.R import RPackages, launch_R_script
+from cdt.utils.R import launch_R_script
 
 from abc import ABC, abstractmethod
 
@@ -25,10 +33,9 @@ from graph_definition import CausalDAGDataset
 from logging_settings import logger
 from utils import calculate_metrics
 
-from causaldag import igsp, unknown_target_igsp, partial_correlation_suffstat, partial_correlation_test
-from graphical_models.rand import directed_erdos, rand_weights
-from conditional_independence.ci_tests import MemoizedCI_Tester, hsic_test, kci_test, hsic, kci
-from conditional_independence import gauss_invariance_suffstat, gauss_invariance_test, MemoizedInvarianceTester
+from causaldag import igsp
+from conditional_independence.ci_tests import MemoizedCI_Tester, hsic_test
+from conditional_independence import MemoizedInvarianceTester
 from conditional_independence import hsic_invariance_test, kci_invariance_test
 
 

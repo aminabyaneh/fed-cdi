@@ -1,0 +1,48 @@
+{
+    "experiments_per_set": 4,
+    "number_of_rounds": 20,
+    "graph_structure": "chain3",
+    "clients_accessible_data": [
+        [
+            5,
+            6
+        ],
+        [
+            10,
+            11
+        ],
+        [
+            15,
+            16
+        ],
+        [
+            20,
+            21
+        ],
+        [
+            3,
+            5
+        ],
+        [
+            5,
+            10
+        ],
+        [
+            10,
+            15
+        ],
+        [
+            15,
+            20
+        ]
+    ],
+    "number_of_clients": [
+        1,
+        20
+    ],
+    "store_folders": [
+        "chain3_1client",
+        "chain3_20client"
+    ],
+    "train_data": 6000
+}

@@ -147,7 +147,7 @@ causal_graphs/exported_graphs.zip
 
 # Logs
 federated/cluster/logs*
-*.pickle
 baselines/dcdi/data*
+federated/cluster/data*
 
 

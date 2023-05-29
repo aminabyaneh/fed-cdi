@@ -32,9 +32,8 @@ import pickle
 from typing import List
 from abc import ABC, abstractmethod
 
-from logging_settings import logger
-
 sys.path.append("../")
+from federated.logging_settings import logger
 
 from causal_discovery.enco import ENCO
 from causal_graphs.graph_definition import CausalDAG

@@ -32,12 +32,11 @@ import shutil
 
 from typing import Dict, List
 
-from causal_learning import ENCOAlg
-from distributed_network import Network
-from logging_settings import logger
-from utils import calculate_metrics, find_shortest_distance_dict
-
 sys.path.append("../")
+from federated.utils import calculate_metrics, find_shortest_distance_dict
+from federated.logging_settings import logger
+from federated.causal_learning import ENCOAlg
+from causal_graphs.graph_definition import CausalDAGDataset
 from causal_discovery.utils import find_best_acyclic_graph
 
 
@@ -106,7 +105,8 @@ class FederatedSimulator:
     def initialize_clients_data(self, graph_type: str = "chain", num_vars = 30,
                                 accessible_data_percentage: int = 100,
                                 obs_data_size: int = 20000, int_data_size: int = 2000,
-                                edge_prob: float or None = None, seed: int = 0):
+                                edge_prob: float or None = None, seed: int = 0,
+                                external_global_dataset: CausalDAGDataset = None):
         """ Initialize client and clients' data for the number of clients in the federated setup.
 
         Args:
@@ -123,10 +123,17 @@ class FederatedSimulator:
                 Defaults to 0.
         """
 
-        self.__num_vars = num_vars
-        global_dataset_dag = ENCOAlg.build_global_dataset(obs_data_size, int_data_size,
-                                                          num_vars, graph_type, edge_prob=edge_prob,
-                                                          seed=seed)
+        # handle real-world data as an externally initialized dataset
+        if external_global_dataset is not None:
+            global_dataset_dag = external_global_dataset
+            self.__num_vars = external_global_dataset.adj_matrix.shape[0]
+            logger.info(f'External dataset parsed.')
+
+        else:
+            self.__num_vars = num_vars
+            global_dataset_dag = ENCOAlg.build_global_dataset(obs_data_size, int_data_size,
+                                                            num_vars, graph_type, edge_prob=edge_prob,
+                                                            seed=seed)
 
         for client_id in range(self.__num_clients):
             try:
@@ -273,7 +280,7 @@ class FederatedSimulator:
 
     def locality_aggregation(self, initial_mass: np.ndarray, alpha: float, beta: float = 0,
                              min_mass: float = 1.0, round_id: int = 0):
-        """ Aggregation of adjacency matrices based on locality.
+        """ Aggregation of adjacency matrices based on locality (proximity).
 
         Args:
             initial_mass (numpy.ndarray): The initial mass given for each client.

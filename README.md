@@ -76,8 +76,6 @@ Please use the following BibTeX formatted **citation**:
 * [Nino Scherrer](https://github.com/ninodimontalcino)
 * [Arash Mehrjou](https://github.com/amehrjou)
 
-## Authors
-
 
 ## License
 
