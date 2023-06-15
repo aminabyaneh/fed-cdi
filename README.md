@@ -1,4 +1,4 @@
-## Federated Causal Discovery From Interventional and Observational Data
+## FED-CD: Federated Causal Discovery From Interventional and Observational Data
 
 The Causal Federated Learning project aims at designing a Cross-Silo Federated Causal Learning algorithms, capable of extracting the underlying Directed Acyclic Graph (DAG) of a distributed dataset, where each agent only has limited access to a specific set of dataset variables and a subset of intervened variables.
 
