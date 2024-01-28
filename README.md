@@ -1,4 +1,4 @@
-## FED-CD: Federated Causal Discovery From Interventional and Observational Data
+# Federated Causal Discovery From Interventions
 
 The Causal Federated Learning project aims at designing a Cross-Silo Federated Causal Learning algorithms, capable of extracting the underlying Directed Acyclic Graph (DAG) of a distributed dataset, where each agent only has limited access to a specific set of dataset variables and a subset of intervened variables.
 
@@ -6,11 +6,14 @@ For further elaboration and details, you can refer to our [paper](https://arxiv.
 
 ## Motivation
 
-Federated Learning trains an algorithm across multiple decentralized devices holding local data samples, without exchanging the private information. Data is generated locally and remains decentralized. Each client stores its own data and cannot read the data of other clients. Data is not independently or identically distributed.
+Existing causal discovery methods typically require the data to be available in a centralized location. However, many practical domains, such as healthcare, limit access to the data gathered by local entities, primarily for privacy and regulatory constraints. Researchers propose distributed and federated causal discovery approaches for decentralized scenarios. While methods that provide a federated perspective on causal discovery primarily emphasize observational data, the implications of utilizing interventional data remains largely unexplored.
 
-Moreover, privacy is an indisputably crucial matter in the world of causal inference. Considering the potential of federated learning to preserve privacy and building up sophisticated models simultaneously, one might wonder whether it is possible to adopt causal learning algorithms to the federated paradigm, aiming at developing a novel and distributed generation of causal inference methods.
+## Method
+
+We propose a federated framework for inferring causal structures from distributed data containing both observational and interventional data. By exchanging updates instead of samples, we ensure privacy while enabling decentralized discovery of the underlying causal graph. We accommodate scenarios with shared or disjoint intervened covariates, and mitigate the adverse effects of interventional data heterogeneity. We provide empirical evidence for the performance and scalability of our approach for decentralized causal discovery using synthetic and real-world graphs.
 
 ## Results
+
 We design a set of experiments showcasing the superiority of our method in decentralized setup, and comparing our approach to naive voting-based predecessors. The following are just a taste of the project's final results.
 
 <p align="center">
@@ -46,13 +49,19 @@ To acquire a better understanding of the environment and features, you just need
 
 Other folders are libraries related to our local learning method and thus are not the main focus of this repository.
 
+
 ### Main simulation file
+
 To run a simulation, you can use the federated simulation file inside the federated folder. The FederatedSimulator class will enable experiments with a through federated setup and two different aggregation methods. Refer to the class description for more information.
 
+
 ## Reproducibility
+
 To reproduce the plots and tables in the final paper, one must run all the experiments in the federated/cluster_experiments.py with proper command structure as given by the file itself. Just remember that the local learning method of each client, ENCO, is computationally demanding especially without a GPU; therefore, running without a GPU will take more than five days on an average Core-i7 computer without a GPU.
 
-After the successful execution of each experiment, the resulting data must be moved into the federated/cluster/data folder as appears in the repository. This folder is already filled with the previous data for ease of reproducibility. The cluster_results_er.ipynb and cluster_results_pr.ipynb notebook can reproduce the plots in total agreement to the paper.
+**To avoid running the method from scratch, you can download our [training data](https://drive.google.com/file/d/1W9JL4iOcUkQhXV0gfNvDpjMkmNt1Jqzf/view?usp=sharing) and simply unpack it next to the plot notebooks in the [cluster folder](federated/cluster/).**
+
+After the successful execution of each experiment, the resulting data must be moved into the federated/cluster/data folder as appears in the repository. The cluster_results_er.ipynb and cluster_results_pr.ipynb notebook can reproduce the plots in agreement with the paper.
 
 ## Contributing
 
@@ -79,4 +88,4 @@ Please use the following BibTeX formatted **citation**:
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
